@@ -23,6 +23,32 @@ public class TimeSLList {
 
     public static void timeGetLast() {
         // TODO: YOUR CODE HERE
+        AList<Integer> Ns = new AList<>();
+        AList<Double> times = new AList<>();
+        AList<Integer> opCounts = new AList<>();
+        int op = 10000;
+
+        for (int n = 1000; n <= 128000; n *= 2) {
+            /* Construct data structure */
+            SLList<Integer> lst = new SLList<>();
+            for (int i = 0; i < n; i++) {
+                lst.addLast(i);
+            }
+
+            /* Timing */
+            Stopwatch sw = new Stopwatch();
+            for (int i = 0; i < op; i++) {
+                lst.getLast();
+            }
+            double timeInSeconds = sw.elapsedTime();
+
+            Ns.addLast(n);
+            times.addLast(timeInSeconds);
+            opCounts.addLast(op);
+        }
+
+        printTimingTable(Ns, times, opCounts);
+
     }
 
 }

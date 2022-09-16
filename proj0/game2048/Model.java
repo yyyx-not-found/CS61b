@@ -1,6 +1,7 @@
 package game2048;
 
 import java.util.Formatter;
+import java.util.Iterator;
 import java.util.Observable;
 
 
@@ -113,6 +114,13 @@ public class Model extends Observable {
         // TODO: Modify this.board (and perhaps this.score) to account
         // for the tilt to the Side SIDE. If the board changed, set the
         // changed local variable to true.
+        board.setViewingPerspective(side);
+
+        for (int col = 0; col < board.size(); col++) {
+            if (tilt_one_col(col)) { changed = true; }
+        }
+
+        board.setViewingPerspective(Side.NORTH);
 
         checkGameOver();
         if (changed) {
@@ -120,6 +128,35 @@ public class Model extends Observable {
         }
         return changed;
     }
+
+    /** Deal with tilt in specific one column.
+     * @return Whether merging occurs in the process.
+     */
+    private boolean tilt_one_col(int col) {
+        int target_row = board.size() - 1; // Row number of the destination that tiles can move to.
+        boolean is_changed = false;
+
+        for (int row = board.size() - 2; row >= 0; row--) {
+            Tile tile = board.tile(col, row);
+            if (tile == null) { continue; }
+
+            while (target_row > row) {
+                Tile target = board.tile(col, target_row);
+                if ((target == null) || (tile.value() == target.value())) {
+                    is_changed = true;
+                    if (board.move(col, target_row, tile)) {
+                        score += target.value() * 2;
+                        target_row--;
+                    }
+                    break;
+                }
+                target_row--;
+            }
+
+        }
+        return is_changed;
+    }
+
 
     /** Checks if the game is over and sets the gameOver variable
      *  appropriately.
@@ -138,6 +175,10 @@ public class Model extends Observable {
      * */
     public static boolean emptySpaceExists(Board b) {
         // TODO: Fill in this function.
+        Iterator<Tile> it = b.iterator();
+        while (it.hasNext()) {
+            if (it.next() == null) { return true; }
+        }
         return false;
     }
 
@@ -148,6 +189,11 @@ public class Model extends Observable {
      */
     public static boolean maxTileExists(Board b) {
         // TODO: Fill in this function.
+        Iterator<Tile> it = b.iterator();
+        while (it.hasNext()) {
+            Tile tile = it.next();
+            if ((tile != null) && (tile.value() == MAX_PIECE)) { return true; }
+        }
         return false;
     }
 
@@ -159,6 +205,24 @@ public class Model extends Observable {
      */
     public static boolean atLeastOneMoveExists(Board b) {
         // TODO: Fill in this function.
+        int size = b.size();
+        Iterator<Tile> it = b.iterator();
+        while (it.hasNext()) {
+            Tile tile = it.next();
+            if (tile == null) { return true; }
+            int row = tile.row(), col = tile.col(), val = tile.value();
+            int[][] adjacent = new int[][]{
+                    {row - 1, col}, {row + 1, col}, {row, col - 1}, {row, col + 1}
+            };
+
+            for (int i = 0; i < adjacent.length; i++) {
+                int adjacent_row = adjacent[i][0], adjacent_col = adjacent[i][1];
+                if ((adjacent_row >= 0) && (adjacent_row < size) && (adjacent_col >= 0) && (adjacent_col < size)) {
+                    Tile adjacent_tile = b.tile(adjacent_col, adjacent_row);
+                    if ((adjacent_tile != null) && (adjacent_tile.value() == val)) { return true; }
+                }
+            }
+        }
         return false;
     }
 
