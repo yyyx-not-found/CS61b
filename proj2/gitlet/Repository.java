@@ -129,11 +129,17 @@ public class Repository {
     }
 
     static void doFindCommand(String commitMessage) {
+        boolean isFound = false;
         for (String commitID : gitTree.commits) {
             Commit commit = getCommit(commitID);
             if (commit.message.equals(commitMessage)) {
-                System.out.println(getCommit(commitID));
+                System.out.println(getHash(getCommit(commitID)));
+                isFound = true;
             }
+        }
+
+        if (!isFound) {
+            message("Found no commit with that message.");
         }
     }
 
@@ -199,7 +205,7 @@ public class Repository {
             File branchFile = join(HEADS_DIR, name);
             if (branchFile.exists()) {
                 Head branch = getHead(name);
-                if (HEAD.name.equals(branch.name)) {
+                if (HEAD.name.equals(name)) {
                     message("No need to checkout the current branch.");
                     System.exit(0);
                 } else {
@@ -294,11 +300,11 @@ public class Repository {
 
         if (splitPoint.equals(givenBranch.headCommit)) {
             message("Given branch is an ancestor of the current branch.");
-            System.exit(0);
+            return;
         } else if (splitPoint.equals(HEAD.headCommit)) {
             doCheckOutCommand(givenBranchName, false);
             message("Current branch fast-forwarded.");
-            System.exit(0);
+            return;
         }
 
         Commit splitCommit = getCommit(splitPoint);
@@ -356,6 +362,8 @@ public class Repository {
     }
 
     private static void mergeConflict(String fileName, String currentBlob, String givenBlob) {
+        message("Encountered a merge conflict.");
+
         StringBuilder stringBuilder = new StringBuilder("<<<<<<< HEAD\n");
 
         String currentContent = currentBlob == null? "\n": new String(getBlob(currentBlob).contents, StandardCharsets.UTF_8);

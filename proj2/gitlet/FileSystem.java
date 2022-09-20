@@ -29,7 +29,7 @@ class FileSystem {
         if (candidateCommits.names.length != 1) {
             return null;
         }
-        return readObject(join(dir, hash), Commit.class);
+        return readObject(join(dir, candidateCommits.names[0]), Commit.class);
     }
 
     /** Return blob with given SHA-1, or return null if not find. */
