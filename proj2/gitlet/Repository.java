@@ -330,35 +330,35 @@ public class Repository {
             String currentBlob = currentFiles.get(fileName);
             String givenBlob = givenFiles.get(fileName);
             String splitBlob = splitCommit.files.get(fileName);
-            boolean isBothDifferentlyModified = currentBlob != null && givenBlob != null && !currentBlob.equals(givenBlob);
 
+            /* Whether file is tracked in split point */
             if (splitBlob != null) {
-                if (currentBlob != null && currentBlob.equals(splitBlob) && givenBlob == null) {
-                    doRemoveCommand(fileName);
-                } else if (isBothDifferentlyModified) {
-                    if (currentBlob.equals(splitBlob)) {
+                /* Whether file is modified in current commit */
+                if (splitBlob.equals(currentBlob)) {
+                    if (givenBlob == null) {
+                        doRemoveCommand(fileName);
+                    } else if (!splitBlob.equals(givenBlob)) {
                         replaceFileInCWD(fileName, givenBlob);
                         stagingArea.map.put(fileName, givenBlob); // Stage
-                    } else if (!givenBlob.equals(splitBlob)) {
-                        mergeConflict(fileName, currentBlob, givenBlob);
-                        isConflict = true;
                     }
+                } else if (!splitBlob.equals(givenBlob)) {
+                    mergeConflict(fileName, currentBlob, givenBlob);
+                    isConflict = true;
                 }
-            } else if (currentBlob == null && givenBlob != null) {
-                replaceFileInCWD(fileName, givenBlob);
-                stagingArea.map.put(fileName, givenBlob); // Stage
-            } else if (isBothDifferentlyModified) {
-                mergeConflict(fileName, currentBlob, givenBlob);
-                isConflict = true;
+            } else {
+                if (currentBlob == null && givenBlob != null) {
+                    replaceFileInCWD(fileName, givenBlob);
+                    stagingArea.map.put(fileName, givenBlob); // Stage
+                } else if (currentBlob != null && givenBlob != null && !currentBlob.equals(givenBlob)) {
+                    mergeConflict(fileName, currentBlob, givenBlob);
+                    isConflict = true;
+                }
             }
-
-            currentFiles.remove(fileName);
-            givenFiles.remove(fileName);
         }
 
         /* Commit */
         String message = isConflict? "Encountered a merge conflict.": "Merged " + givenBranchName + " into " + HEAD.name + ".";
-        makeCommit(message, new Date());
+        makeCommit("Merged " + givenBranchName + " into " + HEAD.name + ".", new Date());
     }
 
     private static void mergeConflict(String fileName, String currentBlob, String givenBlob) {
@@ -369,7 +369,7 @@ public class Repository {
         String currentContent = currentBlob == null? "\n": new String(getBlob(currentBlob).contents, StandardCharsets.UTF_8);
         stringBuilder.append(currentContent);
 
-        stringBuilder.append("=======");
+        stringBuilder.append("=======\n");
 
         String givenContent = givenBlob == null? "\n": new String(getBlob(givenBlob).contents, StandardCharsets.UTF_8);
         stringBuilder.append(givenContent);

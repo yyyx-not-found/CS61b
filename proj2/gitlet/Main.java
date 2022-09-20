@@ -62,8 +62,22 @@ public class Main {
             case "checkout" -> {
                 switch (args.length) {
                     case 2 -> doCheckOutCommand(args[1], false);
-                    case 3 -> doCheckOutCommand(args[2], true);
-                    case 4 -> doCheckOutCommand(args[1], args[3]);
+                    case 3 -> {
+                        if (args[1].equals("--")) {
+                            doCheckOutCommand(args[2], true);
+                        } else {
+                            message("Incorrect operands.");
+                            System.exit(0);
+                        }
+                    }
+                    case 4 -> {
+                        if (args[2].equals("--")) {
+                            doCheckOutCommand(args[1], args[3]);
+                        } else {
+                            message("Incorrect operands.");
+                            System.exit(0);
+                        }
+                    }
                     default -> {
                         message("Incorrect operands.");
                         System.exit(0);
