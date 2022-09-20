@@ -1,26 +1,53 @@
 package gitlet;
 
-// TODO: any imports you need here
+import java.io.Serializable;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
-import java.util.Date; // TODO: You'll likely use this in this class
+import static gitlet.Repository.*;
+import static gitlet.FileSystem.*;
 
-/** Represents a gitlet commit object.
- *  TODO: It's a good idea to give a description here of what else this Class
- *  does at a high level.
- *
- *  @author TODO
- */
-public class Commit {
-    /**
-     * TODO: add instance variables here.
-     *
-     * List all instance variables of the Commit class here with a useful
-     * comment above them describing what that variable represents and how that
-     * variable is used. We've provided one example for `message`.
-     */
-
+final class Commit implements Serializable {
     /** The message of this Commit. */
-    private String message;
+    String message;
+    /** The time when the commit is made. */
+    Date timeStamp;
+    /** Reference to parent commits. */
+    String[] parents;
+    /** Map file name to SHA-1. */
+    Map<String, String> files = new TreeMap<>();
 
-    /* TODO: fill in the rest of this class. */
+    /** Create a new commit and save it in OBJECTS_DIR. */
+    Commit(String message, Date timeStamp, String parent1, String parent2) {
+        this.message = message;
+        this.timeStamp = timeStamp;
+        this.parents = new String[]{parent1, parent2};
+
+        /* Inherit files in parent commit (except file staged for removal) */
+        if (HEAD.headCommit != null) {
+            Commit parent = getCommit(HEAD.headCommit);
+            files = new TreeMap<>(parent.files);
+            for (String fileName : HEAD.removedFileNames) {
+                files.remove(fileName);
+            }
+        }
+
+        /* Update new file in staging area */
+        for (String fileName : stagingArea.map.keySet()) {
+            files.put(fileName, stagingArea.map.get(fileName));
+        }
+        stagingArea.map = new TreeMap<>(); // Clean staging area
+
+        saveObject(this); // Save commit
+    }
+
+    public String toString() {
+        Locale loc = new Locale("en", "US");
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("E MMM dd HH:mm:ss yyyy Z", loc);
+
+        String commit = "commit " + getHash(this) + "\n";
+        String date = "Date: " + simpleDateFormat.format(timeStamp) + "\n";
+
+        return "===\n" + commit + date + message + "\n";
+    }
 }
