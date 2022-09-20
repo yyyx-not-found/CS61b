@@ -66,7 +66,8 @@ class FileSystem {
     /** Replace file with fileName in CWD by given SHA-1 of blob. */
     static void replaceFileInCWD(String fileName, String hash) {
         if (hash == null) {
-            throw error("File does not exist in that commit.");
+            message("File does not exist in that commit.");
+            System.exit(0);
         }
         writeContents(join(CWD, fileName), getBlob(hash).contents);
     }

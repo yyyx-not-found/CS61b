@@ -37,6 +37,11 @@ public class Repository {
     /* Commands */
 
     static void doInitCommand() {
+        if (GITLET_DIR.exists()) {
+            message("A Gitlet version-control system already exists in the current directory.");
+            System.exit(0);
+        }
+
         /* Create Directories */
         GITLET_DIR.mkdir();
         OBJECTS_DIR.mkdir();
@@ -52,23 +57,37 @@ public class Repository {
     static void doAddCommand(String fileName) {
         /* Check file */
         if (!isExisted.judge(fileName)) {
-            throw error("File does not exist.");
+            message("File does not exist.");
+            System.exit(0);
         }
 
-        /* create new blob and add to staging area */
+        /* create new blob, track it and add to staging area */
         Blob newBlob = new Blob(join(CWD, fileName));
+        HEAD.trackedFileNames.add(fileName);
         stagingArea.map.put(newBlob.name, getHash(newBlob));
 
+        /* Restore if it is staged for removal */
+        if (isStagedForRemoval.judge(fileName)) {
+            HEAD.removedFileNames.remove(fileName);
+        }
+
         /* If same as file in current commit, then remove it from staging area. */
-        if (isTracked.judge(fileName) && isSameAsCurrentCommit.judge(fileName)) {
+        if (isSameAsCurrentCommit.judge(fileName)) {
             stagingArea.map.remove(newBlob.name);
         }
     }
 
     static void doCommitCommand(String message, Date timeStamp) {
+        /* Check message */
+        if (message.length() == 0) {
+            message("Please enter a commit message.");
+            System.exit(0);
+        }
+
         /* Make Commit */
-        if (stagingArea.map.isEmpty()) {
-            throw error("No changes added to the commit.");
+        if (stagingArea.map.isEmpty() && HEAD.removedFileNames.isEmpty()) {
+            message("No changes added to the commit.");
+            System.exit(0);
         } else {
             makeCommit(message, timeStamp);
         }
@@ -94,7 +113,8 @@ public class Repository {
         }
 
         if (!tag) {
-            throw error("No reason to remove the file.");
+            message("No reason to remove the file.");
+            System.exit(0);
         }
     }
 
@@ -180,13 +200,15 @@ public class Repository {
             if (branchFile.exists()) {
                 Head branch = getHead(name);
                 if (HEAD.name.equals(branch.name)) {
-                    throw error("No need to checkout the current branch.");
+                    message("No need to checkout the current branch.");
+                    System.exit(0);
                 } else {
                     /* Check */
                     DirList untrackedFileNames = new DirList(CWD,
                             (dir, fileName) -> isUntracked.judge(fileName));
                     if (untrackedFileNames.names.length != 0) {
-                        throw error("There is an untracked file in the way; delete it, or add and commit it first.");
+                        message("There is an untracked file in the way; delete it, or add and commit it first.");
+                        System.exit(0);
                     }
 
                     /* Replace */
@@ -201,7 +223,8 @@ public class Repository {
                     stagingArea.map = new TreeMap<>(); // Clean staging area
                 }
             } else {
-                throw error("No such branch exists.");
+                message("No such branch exists.");
+                System.exit(0);
             }
         }
     }
@@ -210,7 +233,8 @@ public class Repository {
         /* Find Commit */
         Commit commit = getCommit(commitID);
         if (commit == null) {
-            throw error("No commit with that id exists.");
+            message("No commit with that id exists.");
+            System.exit(0);
         }
 
         replaceFileInCWD(fileName, commit.files.get(fileName));
@@ -219,7 +243,8 @@ public class Repository {
 
     static void doBranchCommand(String branchName) {
         if (join(HEADS_DIR, branchName).exists()) {
-            throw error("A branch with that name already exists.");
+            message("A branch with that name already exists.");
+            System.exit(0);
         }
 
         new Head(branchName, getCommit(HEAD.headCommit));
@@ -227,9 +252,11 @@ public class Repository {
 
     static void doRemoveBranchCommand(String branchName) {
         if (!join(HEADS_DIR, branchName).exists()) {
-            throw error("A branch with that name does not exist.");
+            message("A branch with that name does not exist.");
+            System.exit(0);
         } else if (HEAD.name.equals(branchName)) {
-            throw error("Cannot remove the current branch.");
+            message("Cannot remove the current branch.");
+            System.exit(0);
         }
 
         join(HEADS_DIR, branchName).delete(); // Remove branch
@@ -238,7 +265,8 @@ public class Repository {
     static void doResetCommand(String comminID) {
         Commit commit = getCommit(comminID);
         if (commit == null) {
-            throw error("No commit with that id exists.");
+            message("No commit with that id exists.");
+            System.exit(0);
         }
 
         new DirList(CWD).iterate((name) -> restrictedDelete(join(CWD, name))); // Delete files in CWD
@@ -251,23 +279,26 @@ public class Repository {
 
     static void doMergeCommand(String givenBranchName) {
         if (!stagingArea.map.isEmpty() || !HEAD.removedFileNames.isEmpty()) {
-            throw error("You have uncommitted changes.");
+            message("You have uncommitted changes.");
+            System.exit(0);
         } else if (!join(HEADS_DIR, givenBranchName).exists()) {
-            throw error("A branch with that name does not exist.");
+            message("A branch with that name does not exist.");
+            System.exit(0);
         } else if (HEAD.name.equals(givenBranchName)) {
-            throw error("Cannot merge a branch with itself.");
+            message("Cannot merge a branch with itself.");
+            System.exit(0);
         }
 
         Head givenBranch = getHead(givenBranchName);
         String splitPoint = HEAD.splitPoints.get(givenBranchName);
 
         if (splitPoint.equals(givenBranch.headCommit)) {
-            System.out.println("Given branch is an ancestor of the current branch.");
-            return;
+            message("Given branch is an ancestor of the current branch.");
+            System.exit(0);
         } else if (splitPoint.equals(HEAD.headCommit)) {
             doCheckOutCommand(givenBranchName, false);
-            System.out.println("Current branch fast-forwarded.");
-            return;
+            message("Current branch fast-forwarded.");
+            System.exit(0);
         }
 
         Commit splitCommit = getCommit(splitPoint);
@@ -283,7 +314,8 @@ public class Repository {
         DirList untrackedFileNames = new DirList(CWD, (dir, name) ->
                 (isUntracked.judge(name) && !currentFiles.get(name).equals(givenFiles.get(name))));
         if (untrackedFileNames.names.length != 0) {
-            throw error("There is an untracked file in the way; delete it, or add and commit it first.");
+            message("There is an untracked file in the way; delete it, or add and commit it first.");
+            System.exit(0);
         }
 
         /* Merge */

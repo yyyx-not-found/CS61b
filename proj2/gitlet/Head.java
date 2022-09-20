@@ -27,7 +27,6 @@ class Head implements Serializable {
         if (commit != null) {
             String hash = getHash(commit);
             headCommit = hash;
-            trackedFileNames = new TreeSet<>(commit.files.keySet());
 
             splitPoints.put(HEAD.name, hash); // Commit not null means there is a split point
             HEAD.splitPoints.put(name, hash); // Also need to update HEAD

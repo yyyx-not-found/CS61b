@@ -8,14 +8,16 @@ import static gitlet.Utils.*;
 public class Main {
     public static void main(String[] args) {
         if (args.length == 0) {
-            throw error("Please enter a command.");
+            message("Please enter a command.");
+            System.exit(0);
         }
 
         String firstArg = args[0];
         if (!args[0].equals("init")) {
             /* Check Environment */
             if (!GITLET_DIR.exists()) {
-                throw error("Not in an initialized Gitlet directory.");
+                message("Not in an initialized Gitlet directory.");
+                System.exit(0);
             }
 
             /* Load info */
@@ -34,9 +36,7 @@ public class Main {
                 doAddCommand(args[1]);
             }
             case "commit" -> {
-                if (args.length != 2) {
-                    throw error("Please enter a commit message.");
-                }
+                validArgs(args, 2);
                 doCommitCommand(args[1], new Date());
             }
             case "rm" -> {
@@ -64,14 +64,14 @@ public class Main {
                     case 2 -> doCheckOutCommand(args[1], false);
                     case 3 -> doCheckOutCommand(args[2], true);
                     case 4 -> doCheckOutCommand(args[1], args[3]);
-                    default -> throw error("Incorrect operands.");
+                    default -> {
+                        message("Incorrect operands.");
+                        System.exit(0);
+                    }
                 }
             }
             case "branch" -> {
                 validArgs(args, 2);
-                if (args[1].length() >= UID_LENGTH) {
-                    throw error("Incorrect operands.");
-                }
                 doBranchCommand(args[1]);
             }
             case "rm-branch" -> {
@@ -87,7 +87,8 @@ public class Main {
                 doMergeCommand(args[1]);
             }
             default -> {
-                throw Utils.error("No command with that name exists.");
+                message("No command with that name exists.");
+                System.exit(0);
             }
         }
 
@@ -100,7 +101,8 @@ public class Main {
     /** Assert the number of argument be num. */
     private static void validArgs(String[] args, int num) {
         if (args.length != num) {
-            throw error("Incorrect operands.");
+            message("Incorrect operands.");
+            System.exit(0);
         }
     }
 }
