@@ -381,12 +381,12 @@ public class Repository {
     private static void mergeConflict(String fileName, String currentBlob, String givenBlob) {
         message("Encountered a merge conflict.");
 
-        StringBuilder stringBuilder = new StringBuilder("<<<<<<< HEAD\n");
+        StringBuilder stringBuilder = new StringBuilder("<<<<<<< HEAD\r\n");
 
         String currentContent = currentBlob == null? "": new String(getBlob(currentBlob).contents, StandardCharsets.UTF_8);
         stringBuilder.append(currentContent);
 
-        stringBuilder.append("=======\n");
+        stringBuilder.append("=======\r\n");
 
         String givenContent = givenBlob == null? "": new String(getBlob(givenBlob).contents, StandardCharsets.UTF_8);
         stringBuilder.append(givenContent);
