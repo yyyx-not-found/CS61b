@@ -36,7 +36,9 @@ final class Commit implements Serializable {
         for (String fileName : stagingArea.addition.keySet()) {
             files.put(fileName, stagingArea.addition.get(fileName));
         }
-        stagingArea.addition = new TreeMap<>(); // Clean staging area
+        /* Clean staging area */
+        stagingArea.addition = new TreeMap<>();
+        stagingArea.removal = new TreeSet<>();
 
         saveObject(this); // Save commit
     }
