@@ -381,17 +381,17 @@ public class Repository {
     private static void mergeConflict(String fileName, String currentBlob, String givenBlob) {
         message("Encountered a merge conflict.");
 
-        StringBuilder stringBuilder = new StringBuilder("<<<<<<< HEAD\r\n");
+        StringBuilder stringBuilder = new StringBuilder("<<<<<<< HEAD\n");
 
         String currentContent = currentBlob == null? "": new String(getBlob(currentBlob).contents, StandardCharsets.UTF_8);
         stringBuilder.append(currentContent);
 
-        stringBuilder.append("=======\r\n");
+        stringBuilder.append("=======\n");
 
         String givenContent = givenBlob == null? "": new String(getBlob(givenBlob).contents, StandardCharsets.UTF_8);
         stringBuilder.append(givenContent);
 
-        stringBuilder.append(">>>>>>>");
+        stringBuilder.append(">>>>>>>\n"); // Must add \n at the end!!!
 
         writeContents(join(CWD, fileName), stringBuilder.toString());
         doAddCommand(fileName); // Stage
