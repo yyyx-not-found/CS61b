@@ -383,12 +383,12 @@ public class Repository {
 
         StringBuilder stringBuilder = new StringBuilder("<<<<<<< HEAD\n");
 
-        String currentContent = currentBlob == null? "": new String(getBlob(currentBlob).contents, StandardCharsets.UTF_8);
+        String currentContent = currentBlob == null? "": new String(getBlob(currentBlob).contents, StandardCharsets.UTF_8) + "\n";
         stringBuilder.append(currentContent);
 
         stringBuilder.append("=======\n");
 
-        String givenContent = givenBlob == null? "": new String(getBlob(givenBlob).contents, StandardCharsets.UTF_8);
+        String givenContent = givenBlob == null? "": new String(getBlob(givenBlob).contents, StandardCharsets.UTF_8) + "\n";
         stringBuilder.append(givenContent);
 
         stringBuilder.append(">>>>>>>");
