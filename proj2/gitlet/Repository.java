@@ -269,10 +269,24 @@ public class Repository {
             System.exit(0);
         }
 
+        String originHeadCommitID = HEAD.headCommit;
+        HEAD.headCommit = comminID;
+        new DirList(CWD).iterate((name) -> {
+            if (isUntracked.judge(name) && !isSameAsCurrentCommit.judge(name)) {
+                message("There is an untracked file in the way; delete it, or add and commit it first.");
+                HEAD.headCommit = originHeadCommitID;
+                System.exit(0);
+            }
+        });
+
         new DirList(CWD).iterate((name) -> restrictedDelete(join(CWD, name))); // Delete files in CWD
         for (String fileName : commit.files.keySet()) {
             replaceFileInCWD(fileName, commit.files.get(fileName));
         }
+
+        /* Clean staging area */
+        stagingArea.addition = new TreeMap<>();
+        stagingArea.removal = new TreeSet<>();
 
         HEAD.headCommit = comminID;
     }
@@ -341,16 +355,16 @@ public class Repository {
         /* Do operations */
         for (String fileName : files.keySet()) {
             switch (files.get(fileName)) {
-                case "remove":
-                    doRemoveCommand(fileName);
-                    break;
-                case "merge":
+                case "remove" -> doRemoveCommand(fileName);
+                case "merge" -> {
                     mergeConflict(fileName, currentFiles.get(fileName), givenFiles.get(fileName));
                     isConflict = true;
-                case "replace":
+                }
+                case "replace" -> {
                     String givenBlob = givenFiles.get(fileName);
                     replaceFileInCWD(fileName, givenBlob);
                     stagingArea.addition.put(fileName, givenBlob); // Stage
+                }
             }
         }
         merge(givenBranchName, isConflict);
