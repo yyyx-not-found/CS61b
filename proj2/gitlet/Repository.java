@@ -175,7 +175,7 @@ public class Repository {
         for (String commitFileName : getCommit(HEAD.headCommit).files.keySet()) {
             if (!isStagedForRemoval.judge(commitFileName) && !isExisted.judge(commitFileName)) {
                 System.out.println(commitFileName + " (deleted)");
-            } else if (!isSameAsCurrentCommit.judge(commitFileName) && !isStagedForAddition.judge(commitFileName)) {
+            } else if (!isSameAsCurrentCommit.judge(commitFileName) && !isStaged.judge(commitFileName)) {
                 System.out.println(commitFileName + " (modified)");
             }
         }

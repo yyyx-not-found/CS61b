@@ -87,6 +87,8 @@ class FileSystem {
     static final Status isStagedForAddition = (fileName) -> stagingArea.addition.containsKey(fileName);
     /** Staged for removal. */
     static final Status isStagedForRemoval = (fileName) -> stagingArea.removal.contains(fileName);
+    /** Staged for addition or removal. */
+    static final Status isStaged = (fileName) -> (isStagedForAddition.judge(fileName) || isStagedForRemoval.judge(fileName));
     /** Existed in CWD. */
     static final Status isExisted = (fileName) -> join(CWD, fileName).exists();
     /** Tracked in current commit. */
