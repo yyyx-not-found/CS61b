@@ -269,12 +269,9 @@ public class Repository {
             System.exit(0);
         }
 
-        String originHeadCommitID = HEAD.headCommit;
-        HEAD.headCommit = comminID;
         new DirList(CWD).iterate((name) -> {
-            if (isUntracked.judge(name) && !isSameAsCurrentCommit.judge(name)) {
+            if (isUntracked.judge(name) && !commit.files.get(name).equals(getHash(new Blob(join(CWD, name))))) {
                 message("There is an untracked file in the way; delete it, or add and commit it first.");
-                HEAD.headCommit = originHeadCommitID;
                 System.exit(0);
             }
         });
@@ -283,6 +280,9 @@ public class Repository {
         for (String fileName : commit.files.keySet()) {
             replaceFileInCWD(fileName, commit.files.get(fileName));
         }
+
+        HEAD.headCommit = comminID; // Change head commit
+        writeObject(join(HEADS_DIR, HEAD.name), HEAD); // Save branch
 
         /* Clean staging area */
         stagingArea.addition = new TreeMap<>();
@@ -383,12 +383,12 @@ public class Repository {
 
         StringBuilder stringBuilder = new StringBuilder("<<<<<<< HEAD\n");
 
-        String currentContent = currentBlob == null? "": new String(getBlob(currentBlob).contents, StandardCharsets.UTF_8) + "\n";
+        String currentContent = currentBlob == null? "": new String(getBlob(currentBlob).contents, StandardCharsets.UTF_8);
         stringBuilder.append(currentContent);
 
         stringBuilder.append("=======\n");
 
-        String givenContent = givenBlob == null? "": new String(getBlob(givenBlob).contents, StandardCharsets.UTF_8) + "\n";
+        String givenContent = givenBlob == null? "": new String(getBlob(givenBlob).contents, StandardCharsets.UTF_8);
         stringBuilder.append(givenContent);
 
         stringBuilder.append(">>>>>>>");
