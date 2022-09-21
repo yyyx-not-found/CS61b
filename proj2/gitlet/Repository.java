@@ -340,7 +340,7 @@ public class Repository {
                     } else if (!splitBlob.equals(givenBlob)) {
                         addToBeModified(files, fileName, "replace");
                     }
-                } else if (!splitBlob.equals(givenBlob) && currentBlob != null && givenBlob != null) {
+                } else if (!splitBlob.equals(givenBlob) && !(currentBlob == null && givenBlob == null)) {
                     addToBeModified(files, fileName, "merge");
                 }
             } else {

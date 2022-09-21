@@ -80,7 +80,7 @@ class Head implements Serializable {
     /** Merge given branch into the branch. */
     static void merge(String givenBranchName, boolean isConflict) {
         String message = isConflict? "Encountered a merge conflict.": "Merged " + givenBranchName + " into " + HEAD.name + ".";
-        Commit newCommit = new Commit(message, new Date(), givenBranchName);
+        Commit newCommit = new Commit(message, new Date(), getHead(givenBranchName).headCommit);
 
         gitTree.commits.add(getHash(newCommit)); // Add to git tree
         HEAD.headCommit = getHash(newCommit); // Update head commit
