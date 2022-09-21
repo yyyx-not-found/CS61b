@@ -63,17 +63,16 @@ public class Repository {
 
         /* create new blob, track it and add to staging area */
         Blob newBlob = new Blob(join(CWD, fileName));
-        HEAD.trackedFileNames.add(fileName);
-        stagingArea.map.put(newBlob.name, getHash(newBlob));
+        stagingArea.addition.put(newBlob.name, getHash(newBlob));
 
         /* Restore if it is staged for removal */
         if (isStagedForRemoval.judge(fileName)) {
-            HEAD.removedFileNames.remove(fileName);
+            stagingArea.removal.remove(fileName);
         }
 
         /* If same as file in current commit, then remove it from staging area. */
         if (isSameAsCurrentCommit.judge(fileName)) {
-            stagingArea.map.remove(newBlob.name);
+            stagingArea.addition.remove(newBlob.name);
         }
     }
 
@@ -85,7 +84,7 @@ public class Repository {
         }
 
         /* Make Commit */
-        if (stagingArea.map.isEmpty() && HEAD.removedFileNames.isEmpty()) {
+        if (stagingArea.addition.isEmpty() && stagingArea.removal.isEmpty()) {
             message("No changes added to the commit.");
             System.exit(0);
         } else {
@@ -97,17 +96,14 @@ public class Repository {
         boolean tag = false; // check if the function does something.
 
         /* Un-stage */
-        if (stagingArea.map.containsKey(fileName)) {
-            stagingArea.map.remove(fileName);
+        if (stagingArea.addition.containsKey(fileName)) {
+            stagingArea.addition.remove(fileName);
             tag = true;
         }
 
         Commit currentCommit = getCommit(HEAD.headCommit);
         if (currentCommit.files.containsKey(fileName)) {
-            /* Un-track file */
-            HEAD.trackedFileNames.remove(fileName);
-            HEAD.removedFileNames.add(fileName);
-
+            stagingArea.removal.add(fileName); // Staging for removal
             restrictedDelete(join(CWD, fileName)); // Remove file in CWD
             tag = true;
         }
@@ -153,14 +149,14 @@ public class Repository {
 
         /* Staged Files */
         System.out.println("=== Staged Files ===");
-        for (String stagedFileName : stagingArea.map.keySet()) {
+        for (String stagedFileName : stagingArea.addition.keySet()) {
             System.out.println(stagedFileName);
         }
         System.out.println();
 
         /* Removed Files */
         System.out.println("=== Removed Files ===");
-        for (String removedFileName: HEAD.removedFileNames) {
+        for (String removedFileName: stagingArea.removal) {
             System.out.println(removedFileName);
         }
         System.out.println();
@@ -168,7 +164,7 @@ public class Repository {
         /* Modifications Not Staged For Commit */
         System.out.println("=== Modifications Not Staged For Commit ===");
 
-        for (String stagedFileName: stagingArea.map.keySet()) {
+        for (String stagedFileName: stagingArea.addition.keySet()) {
             if (!isExisted.judge(stagedFileName)) {
                 System.out.println(stagedFileName + " (deleted)");
             } else if (!isSameAsStaging.judge(stagedFileName)) {
@@ -177,12 +173,10 @@ public class Repository {
         }
 
         for (String commitFileName : getCommit(HEAD.headCommit).files.keySet()) {
-            if (isTracked.judge(commitFileName)) {
-                if (!isExisted.judge(commitFileName)) {
-                    System.out.println(commitFileName + " (deleted)");
-                } else if (!isSameAsCurrentCommit.judge(commitFileName) && !isStagedForAddition.judge(commitFileName)) {
-                    System.out.println(commitFileName + " (modified)");
-                }
+            if (!isExisted.judge(commitFileName)) {
+                System.out.println(commitFileName + " (deleted)");
+            } else if (!isSameAsCurrentCommit.judge(commitFileName) && !isStagedForAddition.judge(commitFileName)) {
+                System.out.println(commitFileName + " (modified)");
             }
         }
 
@@ -199,7 +193,7 @@ public class Repository {
         if (isFile) {
             /* checkout -- [file name] */
             replaceFileInCWD(name, getCommit(HEAD.headCommit).files.get(name));
-            stagingArea.map.remove(name); // Un-stage
+            stagingArea.addition.remove(name); // Un-stage
         } else {
             /* java gitlet.Main checkout [branch name] */
             File branchFile = join(HEADS_DIR, name);
@@ -210,23 +204,23 @@ public class Repository {
                     System.exit(0);
                 } else {
                     /* Check */
-                    DirList untrackedFileNames = new DirList(CWD,
-                            (dir, fileName) -> isUntracked.judge(fileName));
-                    if (untrackedFileNames.names.length != 0) {
-                        message("There is an untracked file in the way; delete it, or add and commit it first.");
-                        System.exit(0);
+                    new DirList(CWD).iterate((fileName) -> {
+                        if (isUntracked.judge(fileName)) {
+                            message("There is an untracked file in the way; delete it, or add and commit it first.");
+                            System.exit(0);
+                        }
+                    });
+
+                    Commit branchCommit = getCommit(branch.headCommit);
+                    new DirList(CWD).iterate((fileName) -> restrictedDelete(fileName)); // Delete all file in CWD
+                    for (String fileName : branchCommit.files.keySet()) {
+                        replaceFileInCWD(fileName, branchCommit.files.get(fileName));
                     }
 
-                    /* Replace */
                     HEAD = branch; // Change branch
-                    Commit currentCommit = getCommit(HEAD.headCommit);
-
-                    new DirList(CWD).iterate((fileName) -> restrictedDelete(join(CWD, fileName))); // Delete all files in CWD
-                    for (String fileName : currentCommit.files.keySet()) {
-                        replaceFileInCWD(fileName, currentCommit.files.get(fileName));
-                    }
-
-                    stagingArea.map = new TreeMap<>(); // Clean staging area
+                    /* Clean staging area */
+                    stagingArea.addition = new TreeMap<>();
+                    stagingArea.removal = new TreeSet<>();
                 }
             } else {
                 message("No such branch exists.");
@@ -244,7 +238,7 @@ public class Repository {
         }
 
         replaceFileInCWD(fileName, commit.files.get(fileName));
-        stagingArea.map.remove(fileName); // Un-stage
+        stagingArea.addition.remove(fileName); // Un-stage
     }
 
     static void doBranchCommand(String branchName) {
@@ -284,7 +278,7 @@ public class Repository {
     }
 
     static void doMergeCommand(String givenBranchName) {
-        if (!stagingArea.map.isEmpty() || !HEAD.removedFileNames.isEmpty()) {
+        if (!stagingArea.addition.isEmpty() || !stagingArea.removal.isEmpty()) {
             message("You have uncommitted changes.");
             System.exit(0);
         } else if (!join(HEADS_DIR, givenBranchName).exists()) {
@@ -296,7 +290,7 @@ public class Repository {
         }
 
         Head givenBranch = getHead(givenBranchName);
-        String splitPoint = HEAD.splitPoints.get(givenBranchName);
+        String splitPoint = getSplitPoint(givenBranchName);
 
         if (splitPoint.equals(givenBranch.headCommit)) {
             message("Given branch is an ancestor of the current branch.");
@@ -307,58 +301,67 @@ public class Repository {
             return;
         }
 
-        Commit splitCommit = getCommit(splitPoint);
         Map<String, String> splitFiles = getCommit(splitPoint).files;
         Map<String, String> currentFiles = getCommit(HEAD.headCommit).files;
         Map<String, String> givenFiles = getCommit(givenBranch.headCommit).files;
 
-        Set<String> fileNames = new TreeSet<>(splitFiles.keySet());
-        fileNames.addAll(currentFiles.keySet());
-        fileNames.addAll(givenFiles.keySet());
-
-        /* Check whether there is untracked file that will be modified before merge */
-        DirList untrackedFileNames = new DirList(CWD, (dir, name) ->
-                (isUntracked.judge(name) && !currentFiles.get(name).equals(givenFiles.get(name))));
-        if (untrackedFileNames.names.length != 0) {
-            message("There is an untracked file in the way; delete it, or add and commit it first.");
-            System.exit(0);
-        }
+        Map<String, String> files = new TreeMap<>();
+        files.putAll(splitFiles);
+        files.putAll(currentFiles);
+        files.putAll(givenFiles);
 
         /* Merge */
         boolean isConflict = false;
-        for (String fileName : fileNames) {
+        for (String fileName : files.keySet()) {
             String currentBlob = currentFiles.get(fileName);
             String givenBlob = givenFiles.get(fileName);
-            String splitBlob = splitCommit.files.get(fileName);
+            String splitBlob = splitFiles.get(fileName);
 
             /* Whether file is tracked in split point */
             if (splitBlob != null) {
                 /* Whether file is modified in current commit */
                 if (splitBlob.equals(currentBlob)) {
                     if (givenBlob == null) {
-                        doRemoveCommand(fileName);
+                        addToBeModified(files, fileName, "remove");
                     } else if (!splitBlob.equals(givenBlob)) {
-                        replaceFileInCWD(fileName, givenBlob);
-                        stagingArea.map.put(fileName, givenBlob); // Stage
+                        addToBeModified(files, fileName, "replace");
                     }
                 } else if (!splitBlob.equals(givenBlob)) {
-                    mergeConflict(fileName, currentBlob, givenBlob);
-                    isConflict = true;
+                    addToBeModified(files, fileName, "merge");
                 }
             } else {
                 if (currentBlob == null && givenBlob != null) {
-                    replaceFileInCWD(fileName, givenBlob);
-                    stagingArea.map.put(fileName, givenBlob); // Stage
+                    addToBeModified(files, fileName, "replace");
                 } else if (currentBlob != null && givenBlob != null && !currentBlob.equals(givenBlob)) {
-                    mergeConflict(fileName, currentBlob, givenBlob);
-                    isConflict = true;
+                    addToBeModified(files, fileName, "merge");
                 }
             }
         }
 
-        /* Commit */
-        String message = isConflict? "Encountered a merge conflict.": "Merged " + givenBranchName + " into " + HEAD.name + ".";
-        makeCommit("Merged " + givenBranchName + " into " + HEAD.name + ".", new Date());
+        /* Do operations */
+        for (String fileName : files.keySet()) {
+            switch (files.get(fileName)) {
+                case "remove":
+                    doRemoveCommand(fileName);
+                    break;
+                case "merge":
+                    mergeConflict(fileName, currentFiles.get(fileName), givenFiles.get(fileName));
+                    isConflict = true;
+                case "replace":
+                    String givenBlob = givenFiles.get(fileName);
+                    replaceFileInCWD(fileName, givenBlob);
+                    stagingArea.addition.put(fileName, givenBlob); // Stage
+            }
+        }
+        merge(givenBranchName, isConflict);
+    }
+
+    private static void addToBeModified(Map<String, String> files, String fileName, String operation) {
+        if (isUntracked.judge(fileName)) {
+            message("There is an untracked file in the way; delete it, or add and commit it first.");
+            System.exit(0);
+        }
+        files.put(fileName, operation);
     }
 
     private static void mergeConflict(String fileName, String currentBlob, String givenBlob) {
@@ -366,12 +369,12 @@ public class Repository {
 
         StringBuilder stringBuilder = new StringBuilder("<<<<<<< HEAD\n");
 
-        String currentContent = currentBlob == null? "\n": new String(getBlob(currentBlob).contents, StandardCharsets.UTF_8);
+        String currentContent = currentBlob == null? "": new String(getBlob(currentBlob).contents, StandardCharsets.UTF_8);
         stringBuilder.append(currentContent);
 
         stringBuilder.append("=======\n");
 
-        String givenContent = givenBlob == null? "\n": new String(getBlob(givenBlob).contents, StandardCharsets.UTF_8);
+        String givenContent = givenBlob == null? "": new String(getBlob(givenBlob).contents, StandardCharsets.UTF_8);
         stringBuilder.append(givenContent);
 
         stringBuilder.append(">>>>>>>");

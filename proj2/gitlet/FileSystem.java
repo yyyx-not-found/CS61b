@@ -43,10 +43,10 @@ class FileSystem {
 
     /** Return head with given SHA-1, or return null if not find. */
     static Head getHead(String headName) {
-        if (!join(HEADS_DIR, headName).exists()) {
-            return null;
+        if (join(HEADS_DIR, headName).exists()) {
+            return readObject(join(HEADS_DIR, headName), Head.class);
         }
-        return readObject(join(HEADS_DIR, headName), Head.class);
+        return null;
     }
 
     /* File I/O */
@@ -69,7 +69,12 @@ class FileSystem {
             message("File does not exist in that commit.");
             System.exit(0);
         }
-        writeContents(join(CWD, fileName), getBlob(hash).contents);
+        byte[] contents = getBlob(hash).contents;
+        if (contents == null) {
+            writeContents(join(CWD, fileName), "");
+        } else {
+            writeContents(join(CWD, fileName), contents);
+        }
     }
 
     /* Status of File in CWD */
@@ -79,19 +84,19 @@ class FileSystem {
     }
 
     /** Staged for addition. */
-    static final Status isStagedForAddition = (fileName) -> stagingArea.map.containsKey(fileName);
+    static final Status isStagedForAddition = (fileName) -> stagingArea.addition.containsKey(fileName);
     /** Staged for removal. */
-    static final Status isStagedForRemoval = (fileName) -> HEAD.removedFileNames.contains(fileName);
+    static final Status isStagedForRemoval = (fileName) -> stagingArea.removal.contains(fileName);
     /** Existed in CWD. */
     static final Status isExisted = (fileName) -> join(CWD, fileName).exists();
-    /** Tracked in HEAD. */
-    static final Status isTracked = (fileName) -> HEAD.trackedFileNames.contains(fileName);
+    /** Tracked in current commit. */
+    static final Status isTracked = (fileName) -> getCommit(HEAD.headCommit).files.containsKey(fileName);
     /** Present in the working directory but neither staged for addition nor tracked. */
     static final Status isUntracked = (fileName) ->
             isExisted.judge(fileName) && !isStagedForAddition.judge(fileName) && !isTracked.judge(fileName);
     /** No change from staging area. */
     static final Status isSameAsStaging = (fileName) ->
-            isExisted.judge(fileName) && stagingArea.map.containsValue(getHash(new Blob(join(CWD, fileName))));
+            isExisted.judge(fileName) && stagingArea.addition.containsValue(getHash(new Blob(join(CWD, fileName))));
     /** No change from current commit. */
     static final Status isSameAsCurrentCommit = (fileName) ->
             isExisted.judge(fileName) && getCommit(HEAD.headCommit).files.containsValue(getHash(new Blob(join(CWD, fileName))));

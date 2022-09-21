@@ -18,25 +18,25 @@ final class Commit implements Serializable {
     Map<String, String> files = new TreeMap<>();
 
     /** Create a new commit and save it in OBJECTS_DIR. */
-    Commit(String message, Date timeStamp, String parent1, String parent2) {
+    Commit(String message, Date timeStamp, String parent2) {
         this.message = message;
         this.timeStamp = timeStamp;
-        this.parents = new String[]{parent1, parent2};
+        this.parents = new String[]{HEAD.headCommit, parent2};
 
         /* Inherit files in parent commit (except file staged for removal) */
-        if (HEAD.headCommit != null) {
-            Commit parent = getCommit(HEAD.headCommit);
-            files = new TreeMap<>(parent.files);
-            for (String fileName : HEAD.removedFileNames) {
+        Commit parent = getCommit(HEAD.headCommit);
+        if (parent != null) {
+            files.putAll(parent.files);
+            for (String fileName : stagingArea.removal) {
                 files.remove(fileName);
             }
         }
 
         /* Update new file in staging area */
-        for (String fileName : stagingArea.map.keySet()) {
-            files.put(fileName, stagingArea.map.get(fileName));
+        for (String fileName : stagingArea.addition.keySet()) {
+            files.put(fileName, stagingArea.addition.get(fileName));
         }
-        stagingArea.map = new TreeMap<>(); // Clean staging area
+        stagingArea.addition = new TreeMap<>(); // Clean staging area
 
         saveObject(this); // Save commit
     }

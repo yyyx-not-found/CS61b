@@ -4,6 +4,7 @@ import java.util.Date;
 
 import static gitlet.Repository.*;
 import static gitlet.Utils.*;
+import static gitlet.FileSystem.*;
 
 public class Main {
     public static void main(String[] args) {
@@ -107,7 +108,6 @@ public class Main {
         }
 
         writeObject(HEAD_FILE, HEAD); // Save HEAD
-        writeObject(join(HEADS_DIR, HEAD.name), HEAD); // Save branch
         writeObject(STAGING_FILE, stagingArea); // Save staging area
         writeObject(TREE_FILE, gitTree); // Save git tree
     }
