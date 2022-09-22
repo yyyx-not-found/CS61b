@@ -32,6 +32,7 @@ public class Repository {
 
     public static Head HEAD;
     public static StagingArea stagingArea = new StagingArea();
+    public static GitTree gitTree = new GitTree();
 
     /* Commands */
 
@@ -83,7 +84,7 @@ public class Repository {
         }
 
         /* Make Commit */
-        if (NoFileInStagingArea) {
+        if (stagingArea.addition.isEmpty() && stagingArea.removal.isEmpty()) {
             message("No changes added to the commit.");
             System.exit(0);
         } else {
@@ -100,7 +101,7 @@ public class Repository {
             tag = true;
         }
 
-        if (isSameAsCurrentCommit.judge(fileName)) {
+        if (isTracked.judge(fileName)) {
             stagingArea.removal.add(fileName); // Staging for removal
             restrictedDelete(join(CWD, fileName)); // Remove file in CWD
             tag = true;
@@ -139,8 +140,9 @@ public class Repository {
     /** Return a Set containing all commitIDs. */
     static Set<String> getAllCommits() {
         Set<String> commitIDs = new TreeSet<>();
-        new DirList(HEADS_DIR).iterate((headName) ->
-                getAllAncestor(getCommit(getHead(headName).headCommit), commitIDs));
+        for (String commitID : gitTree.leafs) {
+            getAllHistoryCommit(getCommit(commitID), commitIDs);
+        }
         return commitIDs;
     }
 

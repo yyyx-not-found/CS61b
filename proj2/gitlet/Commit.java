@@ -37,6 +37,14 @@ final class Commit implements Serializable {
             files.put(fileName, stagingArea.addition.get(fileName));
         }
 
+        /* Add to git tree */
+        if (parents[0] != null) {
+            gitTree.leafs.remove(parents[0]);
+        } else if (parents[1] != null) {
+            gitTree.leafs.remove(parents[1]);
+        }
+        gitTree.leafs.add(getHash(this));
+
         saveObject(this, false); // Save commit
     }
 

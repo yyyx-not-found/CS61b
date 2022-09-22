@@ -77,6 +77,22 @@ class FileSystem {
         }
     }
 
+    /** Delete old object in OBJECTS_DIR for mutable refs (Head, StagingArea, GitTree...). */
+    static <T extends Serializable> void deleteOldRef(File refFile) {
+        if (!refFile.exists()) {
+            return;
+        }
+
+        String hash = readContentsAsString(refFile);
+        File dir = join(OBJECTS_DIR, hash.substring(0, ABBREVIATE_LENGTH));
+        DirList dirList = new DirList(dir);
+        if (dirList.names.length == 1) {
+            dir.delete(); // Delete folder directly
+        } else {
+            join(dir, hash).delete(); // Delete head file
+        }
+    }
+
     /** Replace file with fileName in CWD by given SHA-1 of blob. */
     static void replaceFileInCWD(String fileName, String hash) {
         if (hash == null) {
@@ -141,15 +157,5 @@ class FileSystem {
     /** No change from current commit. */
     static final Status isSameAsCurrentCommit = (fileName) ->
             isExisted.judge(fileName) && getCommit(HEAD.headCommit).files.containsValue(getHash(new Blob(join(CWD, fileName))));
-
-    /* Status of staging area */
-
-    /** No file staged for addition. */
-    static final boolean NoFileStagedForAddition = stagingArea.addition.isEmpty();
-    /** No file staged for removal. */
-    static final boolean NoFileStagedForRemoval = stagingArea.removal.isEmpty();
-    /** No file in staging area. */
-    static final boolean NoFileInStagingArea = NoFileStagedForAddition && NoFileStagedForRemoval;
-
 
 }

@@ -22,17 +22,7 @@ class Head implements Serializable {
 
     /** Update head commit and also update file in file system. */
     void updateHeadCommit(String headCommit) {
-        /* Delete original Head object in OBJECTS_DIR */
-        if (join(HEADS_DIR, name).exists()) {
-            String hash = readContentsAsString(join(HEADS_DIR, name));
-            File dir = join(OBJECTS_DIR, hash.substring(0, ABBREVIATE_LENGTH));
-            DirList dirList = new DirList(dir);
-            if (dirList.names.length == 1) {
-                dir.delete(); // Delete folder directly
-            } else {
-                join(dir, hash).delete(); // Delete head file
-            }
-        }
+        deleteOldRef(join(HEADS_DIR, name));
 
         /* Update */
         this.headCommit = headCommit;
@@ -67,7 +57,7 @@ class Head implements Serializable {
     static String getSplitPoint(String givenBranchName) {
         /* Get all ancestor of HEAD */
         Set<String> commits = new TreeSet<>();
-        getAllAncestor(getCommit(HEAD.headCommit), commits);
+        getAllHistoryCommit(getCommit(HEAD.headCommit), commits);
 
         /* BFS */
         Commit commit = getCommit(getHead(givenBranchName).headCommit);
@@ -96,7 +86,7 @@ class Head implements Serializable {
     }
 
     /** Modify commits to contain all ancestor commitIDs of given commit, including itself. */
-    static void getAllAncestor(Commit commit, Set<String> commitIDs) {
+    static void getAllHistoryCommit(Commit commit, Set<String> commitIDs) {
         if (commit == null || commitIDs.contains(getHash(commit))) {
             return;
         }
@@ -104,7 +94,7 @@ class Head implements Serializable {
         commitIDs.add(getHash(commit));
         for (String parent : commit.parents) {
             if (parent != null) {
-                getAllAncestor(getCommit(parent), commitIDs);
+                getAllHistoryCommit(getCommit(parent), commitIDs);
             }
         }
     }

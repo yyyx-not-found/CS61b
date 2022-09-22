@@ -4,6 +4,7 @@ import java.util.Date;
 
 import static gitlet.Repository.*;
 import static gitlet.Utils.*;
+import static gitlet.FileSystem.*;
 
 public class Main {
     public static void main(String[] args) {
@@ -21,8 +22,9 @@ public class Main {
             }
 
             /* Load info */
-            HEAD = readObject(HEAD_FILE, Head.class);
-            stagingArea = readObject(STAGING_FILE, StagingArea.class);
+            HEAD = readObject(abbreviateSearch(readContentsAsString(HEAD_FILE)), Head.class);
+            stagingArea = readObject(abbreviateSearch(readContentsAsString(STAGING_FILE)), StagingArea.class);
+            gitTree = readObject(abbreviateSearch(readContentsAsString(TREE_FILE)), GitTree.class);
         }
 
         switch (firstArg) {
@@ -99,8 +101,9 @@ public class Main {
             }
         }
 
-        writeObject(HEAD_FILE, HEAD); // Save HEAD
-        writeObject(STAGING_FILE, stagingArea); // Save staging area
+        writeContents(HEAD_FILE, getHash(HEAD)); // Save HEAD
+        stagingArea.save(); // Save staging area
+        gitTree.save(); // Save tree
     }
 
     /** Assert the number of argument be num. */
