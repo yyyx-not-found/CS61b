@@ -4,7 +4,6 @@ import java.util.Date;
 
 import static gitlet.Repository.*;
 import static gitlet.Utils.*;
-import static gitlet.FileSystem.*;
 
 public class Main {
     public static void main(String[] args) {
@@ -24,7 +23,6 @@ public class Main {
             /* Load info */
             HEAD = readObject(HEAD_FILE, Head.class);
             stagingArea = readObject(STAGING_FILE, StagingArea.class);
-            gitTree = readObject(TREE_FILE, GitTree.class);
         }
 
         switch (firstArg) {
@@ -62,27 +60,21 @@ public class Main {
             }
             case "checkout" -> {
                 switch (args.length) {
-                    case 2 -> doCheckOutCommand(args[1], false);
-                    case 3 -> {
+                    case 2:
+                        checkoutBranch(args[1]);
+                        break;
+                    case 3:
                         if (args[1].equals("--")) {
-                            doCheckOutCommand(args[2], true);
-                        } else {
-                            message("Incorrect operands.");
-                            System.exit(0);
+                            checkoutFile(args[2]);
+                            break;
                         }
-                    }
-                    case 4 -> {
+                    case 4:
                         if (args[2].equals("--")) {
-                            doCheckOutCommand(args[1], args[3]);
-                        } else {
-                            message("Incorrect operands.");
-                            System.exit(0);
+                            checkoutCommit(args[1], args[3]);
+                            break;
                         }
-                    }
-                    default -> {
-                        message("Incorrect operands.");
-                        System.exit(0);
-                    }
+                    message("Incorrect operands.");
+                    System.exit(0);
                 }
             }
             case "branch" -> {
@@ -109,7 +101,6 @@ public class Main {
 
         writeObject(HEAD_FILE, HEAD); // Save HEAD
         writeObject(STAGING_FILE, stagingArea); // Save staging area
-        writeObject(TREE_FILE, gitTree); // Save git tree
     }
 
     /** Assert the number of argument be num. */

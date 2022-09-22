@@ -2,6 +2,8 @@ package gitlet;
 
 import java.io.File;
 import java.io.Serializable;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 import static gitlet.Repository.*;
 import static gitlet.Utils.*;
@@ -10,49 +12,61 @@ class FileSystem {
     /* Hash */
 
     /** Return SHA-1 code of the serializable item. */
-    static <T extends Serializable> String getHash(T item) {
-        return sha1(serialize(item));
+    static <T extends Serializable> String getHash(T object) {
+        return sha1(serialize(object));
+    }
+
+    /** Return pointer of file with given SHA-1 (or abbreviate SHA-1), or return null if not find. */
+    static File abbreviateSearch(String hash) {
+        if (hash == null || hash.length() > UID_LENGTH) {
+            return null;
+        }
+
+        File dir = join(OBJECTS_DIR, hash.substring(0, ABBREVIATE_LENGTH));
+        if (!dir.exists()) {
+            return null;
+        }
+
+        DirList candidates = new DirList(dir, (_dir, name) -> name.startsWith(hash));
+        if (candidates.names.length != 1) {
+            return null;
+        }
+
+        return join(dir, candidates.names[0]);
     }
 
     /** Return commit with given SHA-1, or return null if not find. */
     static Commit getCommit(String hash) {
-        if (hash == null) {
+        File file = abbreviateSearch(hash);
+        if (file == null) {
             return null;
         }
-
-        File dir = join(OBJECTS_DIR, hash.substring(0, ABBREVIATE_LENGTH));
-        if (!dir.exists() || hash.length() > UID_LENGTH) {
-            return null;
-        }
-
-        DirList candidateCommits = new DirList(dir, (_dir, name) -> name.startsWith(hash));
-        if (candidateCommits.names.length != 1) {
-            return null;
-        }
-        return readObject(join(dir, candidateCommits.names[0]), Commit.class);
+        return readObject(file, Commit.class);
     }
 
     /** Return blob with given SHA-1, or return null if not find. */
     static Blob getBlob(String hash) {
-        File dir = join(OBJECTS_DIR, hash.substring(0, ABBREVIATE_LENGTH));
-        if (!dir.exists() || !join(dir, hash).exists()) {
+        File file = abbreviateSearch(hash);
+        if (file == null) {
             return null;
         }
-        return readObject(join(dir, hash), Blob.class);
+        return readObject(file, Blob.class);
     }
 
     /** Return head with given SHA-1, or return null if not find. */
     static Head getHead(String headName) {
-        if (join(HEADS_DIR, headName).exists()) {
-            return readObject(join(HEADS_DIR, headName), Head.class);
+        File headFile = join(HEADS_DIR, headName);
+        if (!join(HEADS_DIR, headName).exists()) {
+            return null;
         }
-        return null;
+
+        return readObject(abbreviateSearch(readContentsAsString(headFile)), Head.class);
     }
 
     /* File I/O */
 
-    /** Save Blob and Commit in OBJECTS_DIR (not overwrite). */
-    static <T extends Serializable> void saveObject(T object) {
+    /** Save Objects (Blob, Commit, Head...) in OBJECTS_DIR with abbreviate folder. */
+    static <T extends Serializable> void saveObject(T object, boolean overwrite) {
         String hash = getHash(object);
         File dir = join(OBJECTS_DIR, hash.substring(0, ABBREVIATE_LENGTH));
         dir.mkdir();
@@ -77,11 +91,36 @@ class FileSystem {
         }
     }
 
-    /* Status of File in CWD */
+    /** Check out all files tracked by given commit, and remove tracked files not presenting in that commit. */
+    static void replaceAllInCWD(String commitID) {
+        Commit commit = getCommit(commitID);
+
+        /* Check */
+        new DirList(CWD).iterate((fileName) -> {
+            String hash = getHash(new Blob(join(CWD, fileName)));
+            if (isUntracked.judge(fileName) && (!hash.equals(commit.files.get(fileName)))) {
+                message("There is an untracked file in the way; delete it, or add and commit it first.");
+                System.exit(0);
+            }
+        });
+
+        new DirList(CWD).iterate((fileName) -> restrictedDelete(fileName)); // Delete all file in CWD
+        for (String fileName : commit.files.keySet()) {
+            replaceFileInCWD(fileName, commit.files.get(fileName));
+        }
+
+        /* Clean staging area */
+        stagingArea.addition = new TreeMap<>();
+        stagingArea.removal = new TreeSet<>();
+    }
+
+    /* Status */
 
     interface Status {
         boolean judge(String fileName);
     }
+
+    /* Status of File in CWD */
 
     /** Staged for addition. */
     static final Status isStagedForAddition = (fileName) -> stagingArea.addition.containsKey(fileName);
@@ -102,4 +141,15 @@ class FileSystem {
     /** No change from current commit. */
     static final Status isSameAsCurrentCommit = (fileName) ->
             isExisted.judge(fileName) && getCommit(HEAD.headCommit).files.containsValue(getHash(new Blob(join(CWD, fileName))));
+
+    /* Status of staging area */
+
+    /** No file staged for addition. */
+    static final boolean NoFileStagedForAddition = stagingArea.addition.isEmpty();
+    /** No file staged for removal. */
+    static final boolean NoFileStagedForRemoval = stagingArea.removal.isEmpty();
+    /** No file in staging area. */
+    static final boolean NoFileInStagingArea = NoFileStagedForAddition && NoFileStagedForRemoval;
+
+
 }

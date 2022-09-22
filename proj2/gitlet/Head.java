@@ -1,5 +1,6 @@
 package gitlet;
 
+import java.io.File;
 import java.io.Serializable;
 import java.util.*;
 
@@ -14,22 +15,52 @@ class Head implements Serializable {
     String headCommit;
 
     /** Create a new branch head on the commit, and save in HEADS_DIR. */
-    Head(String name, Commit commit) {
+    Head(String name, String commit) {
         this.name = name;
-        if (commit != null) {
-            String hash = getHash(commit);
-            headCommit = hash;
-        }
-        writeObject(join(HEADS_DIR, name), this); // Save branch
+        updateHeadCommit(commit);
     }
 
-    /** Do commit on the branch, then update HEAD and branch info. */
-    static void makeCommit(String message, Date date) {
-        Commit newCommit = new Commit(message, date, null);
-        
-        gitTree.commits.add(getHash(newCommit)); // Add to git tree
-        HEAD.headCommit = getHash(newCommit); // Update head commit
-        writeObject(join(HEADS_DIR, HEAD.name), HEAD); // Save branch
+    /** Update head commit and also update file in file system. */
+    void updateHeadCommit(String headCommit) {
+        /* Delete original Head object in OBJECTS_DIR */
+        if (join(HEADS_DIR, name).exists()) {
+            String hash = readContentsAsString(join(HEADS_DIR, name));
+            File dir = join(OBJECTS_DIR, hash.substring(0, ABBREVIATE_LENGTH));
+            DirList dirList = new DirList(dir);
+            if (dirList.names.length == 1) {
+                dir.delete(); // Delete folder directly
+            } else {
+                join(dir, hash).delete(); // Delete head file
+            }
+        }
+
+        /* Update */
+        this.headCommit = headCommit;
+        saveObject(this, false); // Save Head in OBJECTS_DIR
+        writeContents(join(HEADS_DIR, name), getHash(this)); // Save reference of Head in HEADS_DIR
+    }
+
+    /** display each commit backwards along the commit tree, following the first parent commit links. */
+    void log() {
+        Commit commit = getCommit(headCommit);
+        while (commit != null) {
+            System.out.println(commit);
+            commit = getCommit(commit.parents[0]);
+        }
+    }
+
+    /**
+     * Do commit on the branch, then update HEAD and branch info.
+     * @param parent2 is used for merge.
+     */
+    static void makeCommit(String message, Date date, String parent2) {
+        Commit newCommit = new Commit(message, date, parent2);
+
+        /* Clean staging area */
+        stagingArea.addition = new TreeMap<>();
+        stagingArea.removal = new TreeSet<>();
+
+        HEAD.updateHeadCommit(getHash(newCommit));
     }
 
     /** Find split point with given branch. */
@@ -64,36 +95,17 @@ class Head implements Serializable {
         return getHash(splitPoint);
     }
 
-    private static void getAllAncestor(Commit commit, Set<String> commits) {
-        if (commit == null) {
+    /** Modify commits to contain all ancestor commitIDs of given commit, including itself. */
+    static void getAllAncestor(Commit commit, Set<String> commitIDs) {
+        if (commit == null || commitIDs.contains(getHash(commit))) {
             return;
         }
 
-        commits.add(getHash(commit));
+        commitIDs.add(getHash(commit));
         for (String parent : commit.parents) {
             if (parent != null) {
-                getAllAncestor(getCommit(parent), commits);
+                getAllAncestor(getCommit(parent), commitIDs);
             }
         }
     }
-
-    /** Merge given branch into the branch. */
-    static void merge(String givenBranchName, boolean isConflict) {
-        String message = isConflict? "Encountered a merge conflict.": "Merged " + givenBranchName + " into " + HEAD.name + ".";
-        Commit newCommit = new Commit(message, new Date(), getHead(givenBranchName).headCommit);
-
-        gitTree.commits.add(getHash(newCommit)); // Add to git tree
-        HEAD.headCommit = getHash(newCommit); // Update head commit
-        writeObject(join(HEADS_DIR, HEAD.name), HEAD); // Save branch
-    }
-
-    /** display each commit backwards along the commit tree, following the first parent commit links. */
-    void log() {
-        Commit commit = getCommit(headCommit);
-        while (commit != null) {
-            System.out.println(commit);
-            commit = getCommit(commit.parents[0]);
-        }
-    }
-
 }

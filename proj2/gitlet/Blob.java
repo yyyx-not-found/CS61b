@@ -16,6 +16,6 @@ final class Blob implements Serializable {
     Blob(File file) {
         name = file.getName();
         contents = readContents(file);
-        saveObject(this);
+        saveObject(this, false);
     }
 }
