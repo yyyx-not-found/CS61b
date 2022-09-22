@@ -14,7 +14,7 @@ class GitTree implements Serializable {
 
     void save() {
         deleteOldRef(TREE_FILE);
-        saveObject(this, false);
+        saveObject(this, GITLET_DIR.getPath());
         writeContents(TREE_FILE, getHash(this));
     }
 }

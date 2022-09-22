@@ -18,7 +18,7 @@ class StagingArea implements Serializable {
 
     void save() {
         deleteOldRef(STAGING_FILE);
-        saveObject(this, false);
+        saveObject(this, GITLET_DIR.getPath());
         writeContents(STAGING_FILE, getHash(this));
     }
 }

@@ -5,6 +5,7 @@ import java.io.Serializable;
 
 import static gitlet.Utils.*;
 import static gitlet.FileSystem.*;
+import static gitlet.Repository.*;
 
 final class Blob implements Serializable {
     /** Name of the file. */
@@ -16,6 +17,6 @@ final class Blob implements Serializable {
     Blob(File file) {
         name = file.getName();
         contents = readContents(file);
-        saveObject(this, false);
+        saveObject(this, GITLET_DIR.getPath());
     }
 }

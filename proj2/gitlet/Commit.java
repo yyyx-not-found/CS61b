@@ -45,9 +45,10 @@ final class Commit implements Serializable {
         }
         gitTree.leafs.add(getHash(this));
 
-        saveObject(this, false); // Save commit
+        saveObject(this, GITLET_DIR.getPath()); // Save commit
     }
 
+    @Override
     public String toString() {
         Locale loc = new Locale("en", "US");
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat("E MMM dd HH:mm:ss yyyy Z", loc);
@@ -56,5 +57,9 @@ final class Commit implements Serializable {
         String date = "Date: " + simpleDateFormat.format(timeStamp) + "\n";
 
         return "===\n" + commit + date + message + "\n";
+    }
+
+    public int compareTo(Commit commit) {
+        return timeStamp.compareTo(commit.timeStamp);
     }
 }

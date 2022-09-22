@@ -22,9 +22,9 @@ public class Main {
             }
 
             /* Load info */
-            HEAD = readObject(abbreviateSearch(readContentsAsString(HEAD_FILE)), Head.class);
-            stagingArea = readObject(abbreviateSearch(readContentsAsString(STAGING_FILE)), StagingArea.class);
-            gitTree = readObject(abbreviateSearch(readContentsAsString(TREE_FILE)), GitTree.class);
+            HEAD = readObject(abbreviateSearch(readContentsAsString(HEAD_FILE), GITLET_DIR.getPath()), Head.class);
+            stagingArea = readObject(abbreviateSearch(readContentsAsString(STAGING_FILE), GITLET_DIR.getPath()), StagingArea.class);
+            gitTree = readObject(abbreviateSearch(readContentsAsString(TREE_FILE), GITLET_DIR.getPath()), GitTree.class);
         }
 
         switch (firstArg) {
@@ -94,6 +94,18 @@ public class Main {
             case "merge" -> {
                 validArgs(args, 2);
                 doMergeCommand(args[1]);
+            }
+            case "add-remote" -> {
+                validArgs(args, 3);
+                doAddRemoteCommand(args[1], args[2]);
+            }
+            case "rm-remote" -> {
+                validArgs(args, 2);
+                doRemoveRemoteCommand(args[1]);
+            }
+            case "fetch" -> {
+                validArgs(args, 3);
+                doFetchCommand(args[1], args[2]);
             }
             default -> {
                 message("No command with that name exists.");

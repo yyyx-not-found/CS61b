@@ -4,10 +4,17 @@ import java.io.File;
 import java.io.Serializable;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static gitlet.Repository.*;
 import static gitlet.Utils.*;
+import static gitlet.Status.*;
 
+/**
+ * Inspired by https://www.knowledgehut.com/tutorials/git-tutorial/git-objects
+ * which explains the object file system of git.
+ */
 class FileSystem {
     /* Hash */
 
@@ -17,17 +24,18 @@ class FileSystem {
     }
 
     /** Return pointer of file with given SHA-1 (or abbreviate SHA-1), or return null if not find. */
-    static File abbreviateSearch(String hash) {
+    static File abbreviateSearch(String hash, String gitletDir) {
         if (hash == null || hash.length() > UID_LENGTH) {
             return null;
         }
 
-        File dir = join(OBJECTS_DIR, hash.substring(0, ABBREVIATE_LENGTH));
+        File objectDir = join(String.join(File.separator, gitletDir, "objects"));
+        File dir = join(objectDir, hash.substring(0, ABBREVIATE_LENGTH));
         if (!dir.exists()) {
             return null;
         }
 
-        DirList candidates = new DirList(dir, (_dir, name) -> name.startsWith(hash));
+        DirList candidates = new DirList(dir, (_dir, name) -> name.startsWith(hash.substring(ABBREVIATE_LENGTH)));
         if (candidates.names.length != 1) {
             return null;
         }
@@ -35,9 +43,11 @@ class FileSystem {
         return join(dir, candidates.names[0]);
     }
 
+    /* Get */
+
     /** Return commit with given SHA-1, or return null if not find. */
     static Commit getCommit(String hash) {
-        File file = abbreviateSearch(hash);
+        File file = abbreviateSearch(hash, GITLET_DIR.getPath());
         if (file == null) {
             return null;
         }
@@ -46,38 +56,77 @@ class FileSystem {
 
     /** Return blob with given SHA-1, or return null if not find. */
     static Blob getBlob(String hash) {
-        File file = abbreviateSearch(hash);
+        File file = abbreviateSearch(hash, GITLET_DIR.getPath());
         if (file == null) {
             return null;
         }
         return readObject(file, Blob.class);
     }
 
-    /** Return head with given SHA-1, or return null if not find. */
+    /** Return head with given name, not including remote head.
+     * Local head: headName
+     * Fetched head: remoteName/remoteHeadName
+     */
     static Head getHead(String headName) {
         File headFile = join(HEADS_DIR, headName);
-        if (!join(HEADS_DIR, headName).exists()) {
+        if (headFile.exists()) {
+            return readObject(abbreviateSearch(readContentsAsString(headFile), GITLET_DIR.getPath()), Head.class);
+        }
+
+        if (headName.contains("/")) {
+            String[] names = headName.split("/");
+            String remoteName = names[0];
+            String remoteHeadName = names[1];
+            File fetchedHeadFile = new File(String.join(File.separator, REFS_DIR.getPath(), remoteName, remoteHeadName));
+
+            if (fetchedHeadFile.exists()) {
+                return readObject(abbreviateSearch(readContentsAsString(fetchedHeadFile), GITLET_DIR.getPath()), Head.class);
+            }
+        }
+
+        return null;
+    }
+
+    /** Return Head in HEADS_DIR of remote .gitlet folder, or return null if not find. */
+    static Head getRemoteHead(String remoteName, String remoteHeadName) {
+        String remoteGitletDir = getRemoteGitletPath(remoteName);
+        File remoteHeadsDir = new File(String.join(File.separator, remoteGitletDir, "refs", "heads"));
+        File remoteHeadFile = join(remoteHeadsDir, remoteHeadName);
+        if (!remoteHeadFile.exists()) {
             return null;
         }
 
-        return readObject(abbreviateSearch(readContentsAsString(headFile)), Head.class);
+        return readObject(abbreviateSearch(readContentsAsString(remoteHeadFile), remoteGitletDir), Head.class);
+    }
+
+    /** Return path of remote .gitlet folder. */
+    static String getRemoteGitletPath(String remoteName) {
+        String rgex = String.format("\\[Remote\\]\nRemote name: %s\nRemote path: (.*)\n", remoteName);
+        Pattern pattern = Pattern.compile(rgex);
+        Matcher remotePath = pattern.matcher(readContentsAsString(REMOTE_FILE));
+        if (!remotePath.find()) {
+            message("Remote directory not found.");
+            System.exit(0);
+        }
+        return remotePath.group(1);
     }
 
     /* File I/O */
 
-    /** Save Objects (Blob, Commit, Head...) in OBJECTS_DIR with abbreviate folder. */
-    static <T extends Serializable> void saveObject(T object, boolean overwrite) {
+    /** Save Objects (Blob, Commit, Head...) in OBJECTS_DIR (local or remote) with abbreviate folder. */
+    static <T extends Serializable> void saveObject(T object, String gitletDir) {
         String hash = getHash(object);
-        File dir = join(OBJECTS_DIR, hash.substring(0, ABBREVIATE_LENGTH));
+        File objectDir = new File(String.join(File.separator, gitletDir, "objects"));
+        File dir = join(objectDir, hash.substring(0, ABBREVIATE_LENGTH));
         dir.mkdir();
 
         File obj = join(dir, hash);
         if (!obj.exists()) {
-            writeObject(join(dir, hash), object);
+            writeObject(join(dir, hash.substring(ABBREVIATE_LENGTH)), object);
         }
     }
 
-    /** Delete old object in OBJECTS_DIR for mutable refs (Head, StagingArea, GitTree...). */
+    /** Delete old object in OBJECTS_DIR (only local) for mutable refs (Head, StagingArea, GitTree...). */
     static <T extends Serializable> void deleteOldRef(File refFile) {
         if (!refFile.exists()) {
             return;
@@ -89,7 +138,7 @@ class FileSystem {
         if (dirList.names.length == 1) {
             dir.delete(); // Delete folder directly
         } else {
-            join(dir, hash).delete(); // Delete head file
+            join(dir, hash.substring(ABBREVIATE_LENGTH)).delete(); // Delete head file
         }
     }
 
@@ -130,32 +179,51 @@ class FileSystem {
         stagingArea.removal = new TreeSet<>();
     }
 
-    /* Status */
+    /** Synchronize remote head and fetched head, and return head commitID after Synchronization. */
+    static String synchronize(String remoteName, String remoteHeadName) {
+        Head remoteHead = getRemoteHead(remoteName, remoteHeadName);
+        if (remoteHead == null) {
+            message("That remote does not have that branch.");
+            System.exit(0);
+        }
 
-    interface Status {
-        boolean judge(String fileName);
+        Head fetchedHead = getHead(String.join("/", remoteName, remoteHeadName));
+        Commit remoteHeadCommit = getCommit(remoteHead.headCommit);
+
+        String fromGitlet, toGitlet;
+        String commitID, headCommitID;
+        String remoteGitletPath = getRemoteGitletPath(remoteName);
+
+        if (fetchedHead == null || getCommit(fetchedHead.headCommit).compareTo(remoteHeadCommit) < 0) {
+            /* Update fetched head */
+            fromGitlet = remoteGitletPath;
+            toGitlet = GITLET_DIR.getPath();
+            commitID = remoteHead.headCommit;
+        } else {
+            fromGitlet = GITLET_DIR.getPath();
+            toGitlet = remoteGitletPath;
+            commitID = fetchedHead.headCommit;
+        }
+
+        headCommitID = commitID;
+
+        while (commitID != null) {
+            Commit commit = readObject(abbreviateSearch(commitID, fromGitlet), Commit.class);
+
+            if (!abbreviateSearch(commitID, toGitlet).exists()) {
+                saveObject(commit, toGitlet);
+            }
+
+            for (String blobID : commit.files.values()) {
+                File blobFile = abbreviateSearch(blobID, fromGitlet);
+                if (!abbreviateSearch(blobID, toGitlet).exists()) {
+                    saveObject(readObject(blobFile, Blob.class), toGitlet);
+                }
+            }
+
+            commitID = commit.parents[0];
+        }
+
+        return headCommitID;
     }
-
-    /* Status of File in CWD */
-
-    /** Staged for addition. */
-    static final Status isStagedForAddition = (fileName) -> stagingArea.addition.containsKey(fileName);
-    /** Staged for removal. */
-    static final Status isStagedForRemoval = (fileName) -> stagingArea.removal.contains(fileName);
-    /** Staged for addition or removal. */
-    static final Status isStaged = (fileName) -> (isStagedForAddition.judge(fileName) || isStagedForRemoval.judge(fileName));
-    /** Existed in CWD. */
-    static final Status isExisted = (fileName) -> join(CWD, fileName).exists();
-    /** Tracked in current commit. */
-    static final Status isTracked = (fileName) -> getCommit(HEAD.headCommit).files.containsKey(fileName);
-    /** Present in the working directory but neither staged for addition nor tracked. */
-    static final Status isUntracked = (fileName) ->
-            isExisted.judge(fileName) && !isStagedForAddition.judge(fileName) && !isTracked.judge(fileName);
-    /** No change from staging area. */
-    static final Status isSameAsStaging = (fileName) ->
-            isExisted.judge(fileName) && stagingArea.addition.containsValue(getHash(new Blob(join(CWD, fileName))));
-    /** No change from current commit. */
-    static final Status isSameAsCurrentCommit = (fileName) ->
-            isExisted.judge(fileName) && getCommit(HEAD.headCommit).files.containsValue(getHash(new Blob(join(CWD, fileName))));
-
 }

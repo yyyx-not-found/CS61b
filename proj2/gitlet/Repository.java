@@ -3,10 +3,13 @@ package gitlet;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static gitlet.Utils.*;
 import static gitlet.FileSystem.*;
 import static gitlet.Head.*;
+import static gitlet.Status.*;
 
 public class Repository {
     /* Paths */
@@ -20,9 +23,11 @@ public class Repository {
     public static final File REFS_DIR = join(GITLET_DIR, "refs");
     public static final File HEADS_DIR = join(REFS_DIR, "heads");
     public static final File REMOTES_DIR = join(REFS_DIR, "remotes");
-    public static final File HEAD_FILE = join(REFS_DIR, "HEAD");
-    public static final File STAGING_FILE = join(REFS_DIR, "staging");
-    public static final File TREE_FILE = join(REFS_DIR, "tree");
+
+    public static final File HEAD_FILE = join(GITLET_DIR, "HEAD");
+    public static final File STAGING_FILE = join(GITLET_DIR, "staging");
+    public static final File TREE_FILE = join(GITLET_DIR, "git_tree");
+    public static final File REMOTE_FILE = join(GITLET_DIR, "remote");
 
     /* Constants */
     /** The length of folders containing commits for abbreviate search. */
@@ -34,7 +39,7 @@ public class Repository {
     public static StagingArea stagingArea = new StagingArea();
     public static GitTree gitTree = new GitTree();
 
-    /* Commands */
+    /* Functions */
 
     static void doInitCommand() {
         if (GITLET_DIR.exists()) {
@@ -262,17 +267,18 @@ public class Repository {
         if (!stagingArea.addition.isEmpty() || !stagingArea.removal.isEmpty()) {
             message("You have uncommitted changes.");
             System.exit(0);
-        } else if (!join(HEADS_DIR, givenBranchName).exists()) {
-            message("A branch with that name does not exist.");
-            System.exit(0);
         } else if (HEAD.name.equals(givenBranchName)) {
             message("Cannot merge a branch with itself.");
             System.exit(0);
         }
 
         Head givenBranch = getHead(givenBranchName);
-        String splitPoint = getSplitPoint(givenBranchName);
+        if (givenBranch == null) {
+            message("A branch with that name does not exist.");
+            System.exit(0);
+        }
 
+        String splitPoint = getSplitPoint(givenBranchName);
         if (splitPoint.equals(givenBranch.headCommit)) {
             message("Given branch is an ancestor of the current branch.");
             return;
@@ -367,8 +373,7 @@ public class Repository {
     }
 
     static void doAddRemoteCommand(String remoteName, String path) {
-        path = String.join(File.pathSeparator, path.split("/"));
-        File remoteDir = new File(String.join(File.pathSeparator, new String[]{path, "refs", "heads"}));
+        path = String.join(File.separator, path.split("/"));
 
         /* Create folder */
         File dir = join(REMOTES_DIR, remoteName);
@@ -377,17 +382,62 @@ public class Repository {
             System.exit(0);
         }
 
-        /* Copy references of all branches in remote directory */
-        new DirList(remoteDir).iterate((name) -> {
-            writeObject(join(dir, name), readObject(join(remoteDir, name), Head.class));
-        });
+        /* Update REMOTE_FILE */
+        String contents = "";
+        if (REMOTE_FILE.exists()) {
+            contents += readContentsAsString(REMOTE_FILE);
+        }
+        String message = String.format("[Remote]\nRemote name: %s\nRemote path: %s\n", remoteName, path);
+        writeContents(REMOTE_FILE, contents + message);
     }
 
     static void doRemoveRemoteCommand(String remoteName) {
-        if (!join(REMOTES_DIR, remoteName).delete()) {
+        /* Update REMOTE_FILE */
+        String contents = "";
+        String rgex = String.format("\\[Remote\\]\nRemote name: (.*)\nRemote path: (.*)\n", remoteName);
+        Pattern pattern = Pattern.compile(rgex);
+        Matcher matcher = pattern.matcher(readContentsAsString(REMOTE_FILE));
+
+        if (!matcher.find()) {
             message("A remote with that name does not exist.");
             System.exit(0);
         }
+
+        int matcherStart = 0;
+        while (matcher.find(matcherStart)) {
+            if (!matcher.group(1).equals(remoteName)) {
+                contents += matcher.group();
+            }
+            matcherStart = matcher.end();
+        }
+
+        writeContents(REMOTE_FILE, contents);
+    }
+
+    static void doFetchCommand(String remoteName, String remoteHeadName) {
+        String headCommitID = synchronize(remoteName, remoteHeadName);
+        new Head(String.format("%s/%s", remoteName, remoteHeadName), headCommitID); // Create fetch branch
+    }
+
+    static void doPushCommand(String remoteName, String remoteHeadName) {
+        doFetchCommand(remoteName, remoteHeadName);
+        Head fetchedHead = getHead(String.join("/", remoteName, remoteHeadName));
+
+        /* Check */
+        Set<String> historyCommits = new TreeSet<>();
+        getAllHistoryCommit(getCommit(HEAD.headCommit), historyCommits);
+        if (!historyCommits.contains(fetchedHead.headCommit)) {
+            message("Please pull down remote changes before pushing.");
+            System.exit(0);
+        }
+
+        fetchedHead.updateHeadCommit(HEAD.headCommit); // Fast-forward fetch head
+        synchronize(remoteName, remoteHeadName); // sync remote
+    }
+
+    static void doPullCommand(String remoteName, String remoteHeadName) {
+        doFetchCommand(remoteName, remoteHeadName);
+        doMergeCommand(String.format("%s/%s", remoteName, remoteHeadName));
     }
 
 }

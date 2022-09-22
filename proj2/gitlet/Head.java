@@ -3,6 +3,8 @@ package gitlet;
 import java.io.File;
 import java.io.Serializable;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static gitlet.Repository.*;
 import static gitlet.FileSystem.*;
@@ -13,10 +15,18 @@ class Head implements Serializable {
     String name;
     /** Reference to head commit of the branch. */
     String headCommit;
+    /** Record whether the head is local head or fetched head. */
+    boolean isFetched = false;
 
     /** Create a new branch head on the commit, and save in HEADS_DIR. */
     Head(String name, String commit) {
         this.name = name;
+        Pattern pattern = Pattern.compile(".*/.*");
+        Matcher matcher = pattern.matcher(name);
+        if (matcher.matches()) {
+            isFetched = true;
+        }
+
         updateHeadCommit(commit);
     }
 
@@ -26,8 +36,14 @@ class Head implements Serializable {
 
         /* Update */
         this.headCommit = headCommit;
-        saveObject(this, false); // Save Head in OBJECTS_DIR
-        writeContents(join(HEADS_DIR, name), getHash(this)); // Save reference of Head in HEADS_DIR
+        saveObject(this, GITLET_DIR.getPath()); // Save Head in OBJECTS_DIR
+
+        if (isFetched) {
+            String remoteHeadPath = REMOTES_DIR.getPath() + File.separator + name;
+            writeContents(new File(remoteHeadPath), getHash(this)); // Save reference of Head in REMOTES_DIR
+        } else {
+            writeContents(join(HEADS_DIR, name), getHash(this)); // Save reference of Head in HEADS_DIR
+        }
     }
 
     /** display each commit backwards along the commit tree, following the first parent commit links. */
