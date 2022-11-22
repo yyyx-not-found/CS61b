@@ -60,14 +60,6 @@ final class Commit implements Serializable {
         return "===\n" + commit + date + message + "\n";
     }
 
-    public int compareTo(Commit commit) {
-        if (commit == null) {
-            return 1;
-        }
-
-        return timeStamp.compareTo(commit.timeStamp);
-    }
-
     /** Search commit with given ID in file system (support abbreviate search). */
     public static Commit get(String ID) {
         File file = abbreviateSearch(ID, GITLET_DIR.getPath());

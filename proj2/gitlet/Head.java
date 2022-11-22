@@ -34,8 +34,7 @@ class Head implements Serializable {
     static Head get(String headName) {
         File headFile = join(HEADS_DIR, headName);
         if (!headFile.exists()) {
-            message("A branch with that name does not exist.");
-            System.exit(0);
+            return null;
         }
         return readObject(abbreviateSearch(readContentsAsString(headFile), GITLET_DIR.getPath()), Head.class);
     }
