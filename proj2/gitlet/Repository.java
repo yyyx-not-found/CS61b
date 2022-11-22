@@ -269,6 +269,10 @@ public class Repository {
         }
 
         Head givenBranch = Head.get(givenBranchName);
+        if (givenBranch == null) {
+            message("A branch with that name does not exist.");
+            System.exit(0);
+        }
 
         String splitPoint = Head.getSplitPoint(givenBranchName);
         if (splitPoint.equals(givenBranch.headCommit)) {
