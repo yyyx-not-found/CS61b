@@ -3,12 +3,9 @@ package gitlet;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static gitlet.Utils.*;
 import static gitlet.FileSystem.*;
-import static gitlet.Head.*;
 import static gitlet.Status.*;
 
 public class Repository {
@@ -55,8 +52,8 @@ public class Repository {
         REMOTES_DIR.mkdir();
 
         /* Initial Commit */
-        HEAD = new Head("master", null);
-        makeCommit("initial commit", new Date(0), null);
+        HEAD = new Head("master");
+        Head.makeCommit("initial commit", new Date(0), null);
     }
 
     static void doAddCommand(String fileName) {
@@ -93,7 +90,7 @@ public class Repository {
             message("No changes added to the commit.");
             System.exit(0);
         } else {
-            makeCommit(message, timeStamp, null);
+            Head.makeCommit(message, timeStamp, null);
         }
     }
 
@@ -124,14 +121,14 @@ public class Repository {
 
     static void doGlobalLogCommand() {
         for (String commitID : getAllCommits()) {
-            System.out.println(getCommit(commitID));
+            System.out.println(Commit.get(commitID));
         }
     }
 
     static void doFindCommand(String commitMessage) {
         boolean isFound = false;
         for (String commitID : getAllCommits()) {
-            if (getCommit(commitID).message.equals(commitMessage)) {
+            if (Commit.get(commitID).message.equals(commitMessage)) {
                 System.out.println(commitID);
                 isFound = true;
             }
@@ -146,7 +143,7 @@ public class Repository {
     static Set<String> getAllCommits() {
         Set<String> commitIDs = new TreeSet<>();
         for (String commitID : gitTree.leafs) {
-            getAllHistoryCommit(getCommit(commitID), commitIDs);
+            Commit.getParents(Commit.get(commitID), commitIDs);
         }
         return commitIDs;
     }
@@ -184,7 +181,7 @@ public class Repository {
             }
         }
 
-        for (String commitFileName : getCommit(HEAD.headCommit).files.keySet()) {
+        for (String commitFileName : Commit.get(HEAD.headCommit).files.keySet()) {
             if (!isStagedForRemoval.judge(commitFileName) && !isExisted.judge(commitFileName)) {
                 System.out.println(commitFileName + " (deleted)");
             } else if (!isSameAsCurrentCommit.judge(commitFileName) && !isStaged.judge(commitFileName)) {
@@ -202,23 +199,20 @@ public class Repository {
     }
 
     static void checkoutFile(String fileName) {
-        replaceFileInCWD(fileName, getCommit(HEAD.headCommit).files.get(fileName));
+        replaceFileInCWD(fileName, Commit.get(HEAD.headCommit).files.get(fileName));
         stagingArea.addition.remove(fileName); // Un-stage
     }
 
     static void checkoutCommit(String commitID, String fileName) {
-        Commit commit = getCommit(commitID);
-        if (commit == null) {
-            message("No commit with that id exists.");
-            System.exit(0);
-        }
-
+        Commit commit = Commit.get(commitID);
         replaceFileInCWD(fileName, commit.files.get(fileName));
         stagingArea.addition.remove(fileName); // Un-stage
     }
 
     static void checkoutBranch(String branchName) {
-        if (!join(HEADS_DIR, branchName).exists()) {
+        Head branch = Head.get(branchName);
+
+        if (branch == null) {
             message("No such branch exists.");
             System.exit(0);
         } else if (branchName.equals(HEAD.name)) {
@@ -226,7 +220,6 @@ public class Repository {
             System.exit(0);
         }
 
-        Head branch = getHead(branchName);
         replaceAllInCWD(branch.headCommit);
         HEAD = branch; // Switch HEAD
     }
@@ -237,11 +230,14 @@ public class Repository {
             System.exit(0);
         }
 
-        new Head(branchName, HEAD.headCommit);
+        Head newHead = new Head(branchName);
+        newHead.updateHeadCommit(HEAD.headCommit);
     }
 
     static void doRemoveBranchCommand(String branchName) {
-        if (!join(HEADS_DIR, branchName).exists()) {
+        Head head = Head.get(branchName);
+
+        if (head == null) {
             message("A branch with that name does not exist.");
             System.exit(0);
         } else if (HEAD.name.equals(branchName)) {
@@ -253,7 +249,7 @@ public class Repository {
     }
 
     static void doResetCommand(String comminID) {
-        Commit commit = getCommit(comminID);
+        Commit commit = Commit.get(comminID);
         if (commit == null) {
             message("No commit with that id exists.");
             System.exit(0);
@@ -272,13 +268,9 @@ public class Repository {
             System.exit(0);
         }
 
-        Head givenBranch = getHead(givenBranchName);
-        if (givenBranch == null) {
-            message("A branch with that name does not exist.");
-            System.exit(0);
-        }
+        Head givenBranch = Head.get(givenBranchName);
 
-        String splitPoint = getSplitPoint(givenBranchName);
+        String splitPoint = Head.getSplitPoint(givenBranchName);
         if (splitPoint.equals(givenBranch.headCommit)) {
             message("Given branch is an ancestor of the current branch.");
             return;
@@ -288,9 +280,9 @@ public class Repository {
             return;
         }
 
-        Map<String, String> splitFiles = getCommit(splitPoint).files;
-        Map<String, String> currentFiles = getCommit(HEAD.headCommit).files;
-        Map<String, String> givenFiles = getCommit(givenBranch.headCommit).files;
+        Map<String, String> splitFiles = Commit.get(splitPoint).files;
+        Map<String, String> currentFiles = Commit.get(HEAD.headCommit).files;
+        Map<String, String> givenFiles = Commit.get(givenBranch.headCommit).files;
 
         Map<String, String> files = new TreeMap<>();
         files.putAll(splitFiles);
@@ -342,7 +334,7 @@ public class Repository {
         }
 
         String message = isConflict? "Encountered a merge conflict.": "Merged " + givenBranchName + " into " + HEAD.name + ".";
-        makeCommit(message, new Date(), getHead(givenBranchName).headCommit);
+        Head.makeCommit(message, new Date(), Head.get(givenBranchName).headCommit);
     }
 
     private static void addToBeModified(Map<String, String> files, String fileName, String operation) {
@@ -358,86 +350,18 @@ public class Repository {
 
         StringBuilder stringBuilder = new StringBuilder("<<<<<<< HEAD\n");
 
-        String currentContent = currentBlob == null? "": new String(getBlob(currentBlob).contents, StandardCharsets.UTF_8);
+        String currentContent = currentBlob == null? "": new String(Blob.get(currentBlob).contents, StandardCharsets.UTF_8);
         stringBuilder.append(currentContent);
 
         stringBuilder.append("=======\n");
 
-        String givenContent = givenBlob == null? "": new String(getBlob(givenBlob).contents, StandardCharsets.UTF_8);
+        String givenContent = givenBlob == null? "": new String(Blob.get(givenBlob).contents, StandardCharsets.UTF_8);
         stringBuilder.append(givenContent);
 
         stringBuilder.append(">>>>>>>\n"); // Must add \n at the end!!!
 
         writeContents(join(CWD, fileName), stringBuilder.toString());
         doAddCommand(fileName); // Stage
-    }
-
-    static void doAddRemoteCommand(String remoteName, String path) {
-        path = String.join(File.separator, path.split("/"));
-
-        /* Create folder */
-        File dir = join(REMOTES_DIR, remoteName);
-        if (!dir.mkdir()) {
-            message("A remote with that name already exists.");
-            System.exit(0);
-        }
-
-        /* Update REMOTE_FILE */
-        String contents = "";
-        if (REMOTE_FILE.exists()) {
-            contents += readContentsAsString(REMOTE_FILE);
-        }
-        String message = String.format("[Remote]\nRemote name: %s\nRemote path: %s\n", remoteName, path);
-        writeContents(REMOTE_FILE, contents + message);
-    }
-
-    static void doRemoveRemoteCommand(String remoteName) {
-        /* Update REMOTE_FILE */
-        String contents = "";
-        String rgex = String.format("\\[Remote\\]\nRemote name: (.*)\nRemote path: (.*)\n", remoteName);
-        Pattern pattern = Pattern.compile(rgex);
-        Matcher matcher = pattern.matcher(readContentsAsString(REMOTE_FILE));
-
-        if (!matcher.find()) {
-            message("A remote with that name does not exist.");
-            System.exit(0);
-        }
-
-        int matcherStart = 0;
-        while (matcher.find(matcherStart)) {
-            if (!matcher.group(1).equals(remoteName)) {
-                contents += matcher.group();
-            }
-            matcherStart = matcher.end();
-        }
-
-        writeContents(REMOTE_FILE, contents);
-    }
-
-    static void doFetchCommand(String remoteName, String remoteHeadName) {
-        String headCommitID = synchronize(remoteName, remoteHeadName);
-        new Head(String.format("%s/%s", remoteName, remoteHeadName), headCommitID); // Create fetch branch
-    }
-
-    static void doPushCommand(String remoteName, String remoteHeadName) {
-        doFetchCommand(remoteName, remoteHeadName);
-        Head fetchedHead = getHead(String.join("/", remoteName, remoteHeadName));
-
-        /* Check */
-        Set<String> historyCommits = new TreeSet<>();
-        getAllHistoryCommit(getCommit(HEAD.headCommit), historyCommits);
-        if (!historyCommits.contains(fetchedHead.headCommit)) {
-            message("Please pull down remote changes before pushing.");
-            System.exit(0);
-        }
-
-        fetchedHead.updateHeadCommit(HEAD.headCommit); // Fast-forward fetch head
-        synchronize(remoteName, remoteHeadName); // sync remote
-    }
-
-    static void doPullCommand(String remoteName, String remoteHeadName) {
-        doFetchCommand(remoteName, remoteHeadName);
-        doMergeCommand(String.format("%s/%s", remoteName, remoteHeadName));
     }
 
 }

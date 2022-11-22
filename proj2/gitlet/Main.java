@@ -95,18 +95,6 @@ public class Main {
                 validArgs(args, 2);
                 doMergeCommand(args[1]);
             }
-            case "add-remote" -> {
-                validArgs(args, 3);
-                doAddRemoteCommand(args[1], args[2]);
-            }
-            case "rm-remote" -> {
-                validArgs(args, 2);
-                doRemoveRemoteCommand(args[1]);
-            }
-            case "fetch" -> {
-                validArgs(args, 3);
-                doFetchCommand(args[1], args[2]);
-            }
             default -> {
                 message("No command with that name exists.");
                 System.exit(0);

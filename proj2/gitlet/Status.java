@@ -18,7 +18,7 @@ interface Status {
     /** Existed in CWD. */
     Status isExisted = (fileName) -> join(CWD, fileName).exists();
     /** Tracked in current commit. */
-    Status isTracked = (fileName) -> getCommit(HEAD.headCommit).files.containsKey(fileName);
+    Status isTracked = (fileName) -> Commit.get(HEAD.headCommit).files.containsKey(fileName);
     /** Present in the working directory but neither staged for addition nor tracked. */
     Status isUntracked = (fileName) -> isExisted.judge(fileName) &&
             !isStagedForAddition.judge(fileName) && !isTracked.judge(fileName);
@@ -27,5 +27,5 @@ interface Status {
             stagingArea.addition.containsValue(getHash(new Blob(join(CWD, fileName))));
     /** No change from current commit. */
     Status isSameAsCurrentCommit = (fileName) -> isExisted.judge(fileName) &&
-            getCommit(HEAD.headCommit).files.containsValue(getHash(new Blob(join(CWD, fileName))));
+            Commit.get(HEAD.headCommit).files.containsValue(getHash(new Blob(join(CWD, fileName))));
 }

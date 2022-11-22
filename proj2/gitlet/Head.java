@@ -3,8 +3,6 @@ package gitlet;
 import java.io.File;
 import java.io.Serializable;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static gitlet.Repository.*;
 import static gitlet.FileSystem.*;
@@ -15,19 +13,10 @@ class Head implements Serializable {
     String name;
     /** Reference to head commit of the branch. */
     String headCommit;
-    /** Record whether the head is local head or fetched head. */
-    boolean isFetched = false;
 
     /** Create a new branch head on the commit, and save in HEADS_DIR. */
-    Head(String name, String commit) {
+    Head(String name) {
         this.name = name;
-        Pattern pattern = Pattern.compile(".*/.*");
-        Matcher matcher = pattern.matcher(name);
-        if (matcher.matches()) {
-            isFetched = true;
-        }
-
-        updateHeadCommit(commit);
     }
 
     /** Update head commit and also update file in file system. */
@@ -38,20 +27,26 @@ class Head implements Serializable {
         this.headCommit = headCommit;
         saveObject(this, GITLET_DIR.getPath()); // Save Head in OBJECTS_DIR
 
-        if (isFetched) {
-            String remoteHeadPath = REMOTES_DIR.getPath() + File.separator + name;
-            writeContents(new File(remoteHeadPath), getHash(this)); // Save reference of Head in REMOTES_DIR
-        } else {
-            writeContents(join(HEADS_DIR, name), getHash(this)); // Save reference of Head in HEADS_DIR
+        writeContents(join(HEADS_DIR, name), getHash(this)); // Save reference of Head in HEADS_DIR
+    }
+
+    /** Return head with given name. */
+    static Head get(String headName) {
+        File headFile = join(HEADS_DIR, headName);
+        if (!headFile.exists()) {
+            message("A branch with that name does not exist.");
+            System.exit(0);
         }
+        return readObject(abbreviateSearch(readContentsAsString(headFile), GITLET_DIR.getPath()), Head.class);
     }
 
     /** display each commit backwards along the commit tree, following the first parent commit links. */
     void log() {
-        Commit commit = getCommit(headCommit);
-        while (commit != null) {
+        String ID = headCommit;
+        while (ID != null) {
+            Commit commit = Commit.get(ID);
             System.out.println(commit);
-            commit = getCommit(commit.parents[0]);
+            ID = commit.parents[0];
         }
     }
 
@@ -73,10 +68,10 @@ class Head implements Serializable {
     static String getSplitPoint(String givenBranchName) {
         /* Get all ancestor of HEAD */
         Set<String> commits = new TreeSet<>();
-        getAllHistoryCommit(getCommit(HEAD.headCommit), commits);
+        Commit.getParents(Commit.get(HEAD.headCommit), commits);
 
         /* BFS */
-        Commit commit = getCommit(getHead(givenBranchName).headCommit);
+        Commit commit = Commit.get(Head.get(givenBranchName).headCommit);
         Commit splitPoint = null;
         LinkedList<Commit> queue = new LinkedList<>();
         queue.add(commit);
@@ -90,7 +85,7 @@ class Head implements Serializable {
 
             for (String parent : cur.parents) {
                 if (parent != null) {
-                    Commit parentCommit = getCommit(parent);
+                    Commit parentCommit = Commit.get(parent);
                     if (!queue.contains(parentCommit)) {
                         queue.addLast(parentCommit);
                     }
@@ -99,19 +94,5 @@ class Head implements Serializable {
         }
 
         return getHash(splitPoint);
-    }
-
-    /** Modify commits to contain all ancestor commitIDs of given commit, including itself. */
-    static void getAllHistoryCommit(Commit commit, Set<String> commitIDs) {
-        if (commit == null || commitIDs.contains(getHash(commit))) {
-            return;
-        }
-
-        commitIDs.add(getHash(commit));
-        for (String parent : commit.parents) {
-            if (parent != null) {
-                getAllHistoryCommit(getCommit(parent), commitIDs);
-            }
-        }
     }
 }

@@ -19,4 +19,15 @@ final class Blob implements Serializable {
         contents = readContents(file);
         saveObject(this, GITLET_DIR.getPath());
     }
+
+    /** Search blob with given ID in file system (support abbreviate search). */
+    public static Blob get(String ID) {
+        File file = abbreviateSearch(ID, GITLET_DIR.getPath());
+        if (file == null) {
+            message("File does not exist.");
+            System.exit(0);
+        }
+
+        return readObject(file, Blob.class);
+    }
 }
